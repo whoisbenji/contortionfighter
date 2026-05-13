@@ -84,6 +84,19 @@ HTML_HEAD = '''<!DOCTYPE html>
     &nbsp;&nbsp;&nbsp;
     <span>`</span> hitboxes &nbsp;|&nbsp; <span>ESC</span> pause
   </div>
+<div id="err" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:#1a0000;color:#ff6060;font:13px/1.6 monospace;padding:20px;white-space:pre-wrap;z-index:9999;overflow:auto"></div>
+<script>
+window.onerror = function(msg, src, line, col, err) {
+  var el = document.getElementById('err');
+  el.style.display = 'block';
+  el.textContent = 'ERROR: ' + msg + '\nLine ' + line + ':' + col + '\n\n' + (err ? err.stack : '(no stack)');
+};
+window.addEventListener('unhandledrejection', function(e) {
+  var el = document.getElementById('err');
+  el.style.display = 'block';
+  el.textContent = 'UNHANDLED REJECTION:\n' + (e.reason ? (e.reason.stack || e.reason) : e);
+});
+</script>
 <script>
 // Contortion Fighter — single-file bundle
 // Built by build.py from src/ — do not edit directly.
@@ -159,12 +172,13 @@ def deduplicate_consts(content):
     lines = content.split('\n')
     result = []
     for line in lines:
-        stripped = line.strip()
-        m = re.match(r'^(?:const|let|var)\s+([A-Za-z_$]\w*)', stripped)
+        # Only deduplicate top-level (non-indented) declarations.
+        # Declarations inside functions/blocks have leading whitespace — leave them alone.
+        m = re.match(r'^(?:const|let|var)\s+([A-Za-z_$]\w*)', line)
         if m:
             name = m.group(1)
             if name in seen:
-                result.append('// [bundled: ' + stripped + ']')
+                result.append('// [bundled: ' + line.strip() + ']')
                 continue
             seen.add(name)
         result.append(line)

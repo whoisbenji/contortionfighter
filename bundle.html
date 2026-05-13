@@ -54,6 +54,23 @@
     &nbsp;&nbsp;&nbsp;
     <span>`</span> hitboxes &nbsp;|&nbsp; <span>ESC</span> pause
   </div>
+<div id="err" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:#1a0000;color:#ff6060;font:13px/1.6 monospace;padding:20px;white-space:pre-wrap;z-index:9999;overflow:auto"></div>
+<script>
+window.onerror = function(msg, src, line, col, err) {
+  var el = document.getElementById('err');
+  el.style.display = 'block';
+  el.textContent = 'ERROR: ' + msg + '
+Line ' + line + ':' + col + '
+
+' + (err ? err.stack : '(no stack)');
+};
+window.addEventListener('unhandledrejection', function(e) {
+  var el = document.getElementById('err');
+  el.style.display = 'block';
+  el.textContent = 'UNHANDLED REJECTION:
+' + (e.reason ? (e.reason.stack || e.reason) : e);
+});
+</script>
 <script>
 // Contortion Fighter — single-file bundle
 // Built by build.py from src/ — do not edit directly.
@@ -1065,7 +1082,7 @@ function updateFighter(fighter, input, opponent, motionBuf) {
 // gets to run its handler in the same frame (e.g. you can act on landing frame).
 
 function autoTransition(fighter) {
-// [bundled: const s = fighter.state;]
+  const s = fighter.state;
 
   // Landing: air → ground
   if (isAirState(s) && fighter.onGround) {
@@ -1076,7 +1093,7 @@ function autoTransition(fighter) {
 
   // Attack end
   if (isAttackState(s)) {
-// [bundled: const move = getMove(fighter);]
+    const move = getMove(fighter);
     if (move) {
       const total = move.startup + move.active + move.recovery;
       if (fighter.stateFrame >= total) {
@@ -1164,7 +1181,7 @@ function handleGround(fighter, input, motionBuf) {
 
 function handleAir(fighter, input, motionBuf) {
   // Air drift
-// [bundled: const ws = fighter.characterDef.stats.walkSpeed;]
+  const ws = fighter.characterDef.stats.walkSpeed;
   if (input.right)      fighter.vx = ws;
   else if (input.left)  fighter.vx = -ws;
   else                  fighter.vx *= 0.85;
@@ -1175,7 +1192,7 @@ function handleAir(fighter, input, motionBuf) {
 }
 
 function handleAttack(fighter, input, motionBuf) {
-// [bundled: const move = getMove(fighter);]
+  const move = getMove(fighter);
   if (!move) return;
 
   const sf = fighter.stateFrame;
@@ -1248,11 +1265,11 @@ function applyHit(defender, hit, attacker) {
 function computeHitboxes(fighter) {
   if (!isAttackState(fighter.state)) return [];
 
-// [bundled: const move = getMove(fighter);]
+  const move = getMove(fighter);
   if (!move) return [];
 
   const { startup, active } = move;
-// [bundled: const sf = fighter.stateFrame;]
+  const sf = fighter.stateFrame;
 
   // Only live during active frames
   if (sf < startup || sf >= startup + active) return [];
@@ -1265,7 +1282,7 @@ function computeHitboxes(fighter) {
 
 function computeHurtboxes(fighter) {
   const def = fighter.characterDef;
-// [bundled: const s = fighter.state;]
+  const s = fighter.state;
 
   // Choose base hurtbox set for current stance
   let boxes;
@@ -1279,7 +1296,7 @@ function computeHurtboxes(fighter) {
 
   // Per-frame overrides from move data (contortion hurtbox changes — step 8)
   if (isAttackState(s)) {
-// [bundled: const move = getMove(fighter);]
+    const move = getMove(fighter);
     if (move?.hurtboxOverrides) {
       const override = move.hurtboxOverrides[fighter.stateFrame];
       if (override) boxes = override;
@@ -1298,7 +1315,7 @@ function transitionTo(fighter, newState) {
 }
 
 function tryStartAttack(fighter, moveName) {
-// [bundled: const move = fighter.characterDef.moves[moveName];]
+  const move = fighter.characterDef.moves[moveName];
   if (!move) return false;  // move not yet defined in character data
 
   // Air attacks only available in air; ground attacks only on ground
@@ -1329,7 +1346,7 @@ function checkBlock(defender, hitData) {
 // CRT scanline overlay + chromatic aberration pass.
 // Operates on the offscreen canvas by drawing on top of it.
 
-// [bundled: const W = 640, H = 360;]
+const W = 640, H = 360;
 
 // Pre-build scanline pattern into an OffscreenCanvas once
 let _scanlinePattern = null;
@@ -1429,7 +1446,7 @@ const HURTBOX_STROKE = 'rgba( 80, 160, 255, 0.95)';
 
 function drawFighter(ctx, fighter, alpha, showBoxes) {
   const x = lerp(fighter.prevX, fighter.x, alpha);
-// [bundled: const y = lerp(fighter.prevY, fighter.y, alpha);]
+  const y = lerp(fighter.prevY, fighter.y, alpha);
 
   ctx.save();
   ctx.translate(x, y);
@@ -1485,7 +1502,7 @@ function drawLimbs(ctx, fighter) {
   ctx.strokeStyle = darken(fighter.color, 0.55);
   ctx.lineCap = 'round';
 
-// [bundled: const s = fighter.state;]
+  const s = fighter.state;
 
   if      (s === STATE.IDLE)                       poseIdle(ctx, fighter);
   else if (s === STATE.WALK_F || s === STATE.WALK_B) poseWalk(ctx, fighter);
@@ -1565,9 +1582,9 @@ function poseKO(ctx, f) {
 
 // Attack pose — dispatches to a per-move pose if available, else generic
 function poseAttack(ctx, f) {
-// [bundled: const moveName = getMoveFromState(f.state);]
-// [bundled: const sf = f.stateFrame;]
-// [bundled: const move = f.characterDef.moves[moveName];]
+  const moveName = getMoveFromState(f.state);
+  const sf = f.stateFrame;
+  const move = f.characterDef.moves[moveName];
 
   if (!move) { poseIdle(ctx, f); return; }
 
@@ -1678,7 +1695,7 @@ function drawBoxes(ctx, fighter, alpha) {
     ctx.strokeRect(r.x, r.y, r.w, r.h);
   }
   for (const hb of fighter.hitboxes) {
-// [bundled: const r = toWorldBox(hb, snap);]
+    const r = toWorldBox(hb, snap);
     ctx.fillStyle = HITBOX_FILL;
     ctx.fillRect(r.x, r.y, r.w, r.h);
     ctx.strokeStyle = HITBOX_STROKE;
@@ -1688,11 +1705,11 @@ function drawBoxes(ctx, fighter, alpha) {
 }
 
 function drawDebugText(ctx, fighter, alpha) {
-// [bundled: const ix = lerp(fighter.prevX, fighter.x, alpha);]
-// [bundled: const iy = lerp(fighter.prevY, fighter.y, alpha);]
+  const ix = lerp(fighter.prevX, fighter.x, alpha);
+  const iy = lerp(fighter.prevY, fighter.y, alpha);
 
-// [bundled: const s = fighter.state;]
-// [bundled: const sf = fighter.stateFrame;]
+  const s = fighter.state;
+  const sf = fighter.stateFrame;
 
   ctx.save();
   ctx.font = '6px monospace';
@@ -1701,10 +1718,10 @@ function drawDebugText(ctx, fighter, alpha) {
   // State name
   let label = s;
   if (isAttackState(s)) {
-// [bundled: const moveName = getMoveFromState(s);]
-// [bundled: const move = fighter.characterDef.moves[moveName];]
+    const moveName = getMoveFromState(s);
+    const move = fighter.characterDef.moves[moveName];
     if (move) {
-// [bundled: const total = move.startup + move.active + move.recovery;]
+      const total = move.startup + move.active + move.recovery;
       let phase = 'startup';
       if (sf >= move.startup && sf < move.startup + move.active)  phase = 'ACTIVE';
       else if (sf >= move.startup + move.active)                   phase = 'recovery';
@@ -1745,9 +1762,9 @@ function darken (hex, amt) { return shiftColor(hex, -amt); }
 function shiftColor(hex, amt) {
   const n = parseInt(hex.replace('#', ''), 16);
   const clamp = v => Math.max(0, Math.min(255, v));
-// [bundled: const r = clamp(((n >> 16) & 0xff) + Math.round(amt * 255));]
+  const r = clamp(((n >> 16) & 0xff) + Math.round(amt * 255));
   const g = clamp(((n >>  8) & 0xff) + Math.round(amt * 255));
-// [bundled: const b = clamp(( n        & 0xff) + Math.round(amt * 255));]
+  const b = clamp(( n        & 0xff) + Math.round(amt * 255));
   return `rgb(${r},${g},${b})`;
 }
 
@@ -1840,7 +1857,7 @@ function drawAnnouncement(ctx, round) {
     case PHASE.INTRO: {
       // "ROUND X"
       const fade = Math.min(1, (180 - round.phaseTimer) / 20);
-// [bundled: const alpha = round.phaseTimer < 30 ? round.phaseTimer / 30 : fade;]
+      const alpha = round.phaseTimer < 30 ? round.phaseTimer / 30 : fade;
       ctx.globalAlpha = alpha;
       drawBigText(ctx, `ROUND ${round.roundNumber}`, W / 2, H / 2 - 20, 32, '#ffdd00');
       if (round.phaseTimer < 120) {
@@ -2003,7 +2020,7 @@ function render(alpha) {
   renderer.render(fighters, round, alpha);
 
   if (paused) {
-// [bundled: const ctx = renderer.ctx;]
+    const ctx = renderer.ctx;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(0, 0, W, H);
     ctx.textAlign = 'center';
