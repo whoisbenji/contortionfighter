@@ -1,5 +1,5 @@
 // Round lifecycle: INTRO → FIGHT → KO → RESULT → (restart)
-import { STATE } from './fighter.js';
+import { STATE } from '../engine/stateMachine.js';
 
 export const PHASE = {
   INTRO:   'INTRO',

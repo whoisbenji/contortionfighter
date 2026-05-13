@@ -1,5 +1,6 @@
 // AABB hit detection between hitboxes and hurtboxes.
-// Boxes are defined relative to the fighter's origin (bottom-centre).
+// Boxes are defined relative to the fighter's bottom-centre origin.
+// knockback is now a vector { x, y } — x is "away from attacker", y<0 = up (launcher).
 
 /**
  * Returns true if two axis-aligned rects overlap.
@@ -15,12 +16,11 @@ export function rectsOverlap(a, b) {
 }
 
 /**
- * Convert a fighter's local box definition to world-space rect.
- * localBox: { ox, oy, w, h }  (ox/oy = offset from fighter origin)
- * fighter: { x, y, facing }   (x/y = bottom-centre, facing = 1 or -1)
+ * Convert a fighter's local box definition to a world-space rect.
+ * localBox: { ox, oy, w, h }  (ox/oy = offset from bottom-centre; ox flipped by facing)
+ * fighter:  { x, y, facing, h }
  */
 export function toWorldBox(localBox, fighter) {
-  // Flip ox horizontally when facing left
   const worldOx = localBox.ox * fighter.facing;
   return {
     x: fighter.x + worldOx - localBox.w / 2,
@@ -32,7 +32,8 @@ export function toWorldBox(localBox, fighter) {
 
 /**
  * Check all active hitboxes from attacker against all hurtboxes of defender.
- * Returns the first overlapping pair, or null.
+ * Returns the first overlapping pair as { hitbox, hurtbox, data }, or null.
+ * data = the hitbox definition from the move (contains damage, hitstun, knockback, etc.)
  */
 export function checkHit(attacker, defender) {
   for (const hb of attacker.hitboxes) {
