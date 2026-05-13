@@ -1,0 +1,2036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contortion Fighter</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0010;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+      font-family: monospace;
+    }
+    #wrapper {
+      box-shadow:
+        0 0 0 2px #1a0030,
+        0 0 30px 8px rgba(120, 0, 200, 0.4),
+        0 0 80px 20px rgba(80, 0, 150, 0.2);
+      border-radius: 4px;
+    }
+    #game {
+      display: block;
+      width: 1280px;
+      height: 720px;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      border-radius: 4px;
+    }
+    #controls {
+      margin-top: 12px;
+      color: rgba(180, 120, 255, 0.6);
+      font-size: 11px;
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+    #controls span { color: rgba(255, 200, 80, 0.7); }
+  </style>
+</head>
+<body>
+  <div id="wrapper">
+    <canvas id="game"></canvas>
+  </div>
+  <div id="controls">
+    P1: <span>WASD</span> move &nbsp;|&nbsp;
+    <span>F G H</span> LP/MP/HP &nbsp;|&nbsp; <span>R T Y</span> LK/MK/HK
+    &nbsp;&nbsp;&nbsp;
+    P2: <span>ARROWS</span> move &nbsp;|&nbsp;
+    <span>J K L</span> LP/MP/HP &nbsp;|&nbsp; <span>U I O</span> LK/MK/HK
+    &nbsp;&nbsp;&nbsp;
+    <span>`</span> hitboxes &nbsp;|&nbsp; <span>ESC</span> pause
+  </div>
+<script>
+// Contortion Fighter — single-file bundle
+// Built by build.py from src/ — do not edit directly.
+// =====================================================================
+
+// ═══ engine/stateMachine.js ═══════════════════════════════════
+// State constants and helpers for the fighter state machine.
+// Attack states are dynamically named 'ATK_<moveName>' — never hardcoded here.
+
+const STATE = {
+  IDLE:       'IDLE',
+  WALK_F:     'WALK_F',
+  WALK_B:     'WALK_B',
+  JUMP_N:     'JUMP_N',   // neutral jump
+  JUMP_F:     'JUMP_F',   // forward jump
+  JUMP_B:     'JUMP_B',   // back jump
+  CROUCH:     'CROUCH',
+  BLOCK_HIGH: 'BLOCK_HIGH',
+  BLOCK_LOW:  'BLOCK_LOW',
+  HITSTUN:    'HITSTUN',
+  BLOCKSTUN:  'BLOCKSTUN',
+  KNOCKDOWN:  'KNOCKDOWN',
+  GETUP:      'GETUP',
+  KO:         'KO',
+};
+
+const attackState    = moveName => `ATK_${moveName}`;
+const isAttackState  = state   => typeof state === 'string' && state.startsWith('ATK_');
+const getMoveFromState = state => state.slice(4);  // strips 'ATK_'
+
+const isGroundState = s =>
+  s === STATE.IDLE || s === STATE.WALK_F || s === STATE.WALK_B || s === STATE.CROUCH;
+
+const isAirState = s =>
+  s === STATE.JUMP_N || s === STATE.JUMP_F || s === STATE.JUMP_B;
+
+/** True if the fighter's current move has an invulnerability window covering the current frame. */
+function isInvulnerable(fighter) {
+  if (!isAttackState(fighter.state)) return false;
+  const move = fighter.characterDef.moves[getMoveFromState(fighter.state)];
+  if (!move?.invulnFrames) return false;
+  const [s, e] = move.invulnFrames;
+  return fighter.stateFrame >= s && fighter.stateFrame <= e;
+}
+
+/** True if the fighter's facing direction should be locked (not auto-updated). */
+function isFacingLocked(state) {
+  return state === STATE.KO || state === STATE.KNOCKDOWN || state === STATE.GETUP;
+}
+
+// ═══ engine/physics.js ═══════════════════════════════════
+// Physics constants and integration helpers.
+// All values are in pixels at internal 640x360 resolution.
+// Per-character stats (walkSpeed, jumpHeight) come from characterDef.stats, not here.
+
+const GRAVITY     = 0.65;   // px per frame² applied to all fighters
+const FLOOR_Y     = 300;    // y-coordinate of the ground surface (bottom of fighters)
+const STAGE_LEFT  = 40;     // left wall (fighter centre x limit)
+const STAGE_RIGHT = 600;    // right wall
+
+/**
+ * Integrate velocity and position for one logic tick.
+ * Mutates fighter.x, fighter.y, fighter.vx, fighter.vy, fighter.onGround.
+ * stats: characterDef.stats (unused currently, reserved for per-char gravity modifiers)
+ */
+function integratePhysics(fighter, stats) {  // eslint-disable-line no-unused-vars
+  fighter.vy += GRAVITY;
+
+  fighter.x += fighter.vx;
+  fighter.y += fighter.vy;
+
+  // Floor collision
+  if (fighter.y >= FLOOR_Y) {
+    fighter.y  = FLOOR_Y;
+    fighter.vy = 0;
+    fighter.onGround = true;
+  } else {
+    fighter.onGround = false;
+  }
+
+  // Stage walls (measured from fighter centre x)
+  const hw = fighter.w / 2;
+  if (fighter.x - hw < STAGE_LEFT) {
+    fighter.x  = STAGE_LEFT + hw;
+    fighter.vx = 0;
+  }
+  if (fighter.x + hw > STAGE_RIGHT) {
+    fighter.x  = STAGE_RIGHT - hw;
+    fighter.vx = 0;
+  }
+}
+
+// ═══ engine/collision.js ═══════════════════════════════════
+// AABB hit detection between hitboxes and hurtboxes.
+// Boxes are defined relative to the fighter's bottom-centre origin.
+// knockback is now a vector { x, y } — x is "away from attacker", y<0 = up (launcher).
+
+/**
+ * Returns true if two axis-aligned rects overlap.
+ * Each rect: { x, y, w, h } in world space (top-left origin).
+ */
+function rectsOverlap(a, b) {
+  return (
+    a.x < b.x + b.w &&
+    a.x + a.w > b.x &&
+    a.y < b.y + b.h &&
+    a.y + a.h > b.y
+  );
+}
+
+/**
+ * Convert a fighter's local box definition to a world-space rect.
+ * localBox: { ox, oy, w, h }  (ox/oy = offset from bottom-centre; ox flipped by facing)
+ * fighter:  { x, y, facing, h }
+ */
+function toWorldBox(localBox, fighter) {
+  const worldOx = localBox.ox * fighter.facing;
+  return {
+    x: fighter.x + worldOx - localBox.w / 2,
+    y: fighter.y - fighter.h + localBox.oy,
+    w: localBox.w,
+    h: localBox.h,
+  };
+}
+
+/**
+ * Check all active hitboxes from attacker against all hurtboxes of defender.
+ * Returns the first overlapping pair as { hitbox, hurtbox, data }, or null.
+ * data = the hitbox definition from the move (contains damage, hitstun, knockback, etc.)
+ */
+function checkHit(attacker, defender) {
+  for (const hb of attacker.hitboxes) {
+    const worldHb = toWorldBox(hb, attacker);
+    for (const hurt of defender.hurtboxes) {
+      const worldHurt = toWorldBox(hurt, defender);
+      if (rectsOverlap(worldHb, worldHurt)) {
+        return { hitbox: worldHb, hurtbox: worldHurt, data: hb };
+      }
+    }
+  }
+  return null;
+}
+
+// ═══ engine/loop.js ═══════════════════════════════════
+// Fixed-timestep game loop.
+// Logic runs at exactly 60hz regardless of display refresh rate.
+// Render receives an interpolation factor (0..1) for smooth visuals.
+
+const STEP_MS = 1000 / 60; // 16.667ms per logic tick
+
+class GameLoop {
+  constructor({ update, render }) {
+    this.update = update;   // (dt: number) => void  — dt always === STEP_MS
+    this.render = render;   // (alpha: number) => void — alpha in [0,1]
+    this._running = false;
+    this._rafId = null;
+    this._lastTime = null;
+    this._accumulated = 0;
+  }
+
+  start() {
+    this._running = true;
+    this._lastTime = performance.now();
+    this._rafId = requestAnimationFrame(this._tick.bind(this));
+  }
+
+  stop() {
+    this._running = false;
+    if (this._rafId) cancelAnimationFrame(this._rafId);
+  }
+
+  _tick(now) {
+    if (!this._running) return;
+
+    let elapsed = now - this._lastTime;
+    this._lastTime = now;
+
+    // Cap to avoid spiral-of-death on tab focus-restore
+    if (elapsed > 200) elapsed = 200;
+
+    this._accumulated += elapsed;
+
+    while (this._accumulated >= STEP_MS) {
+      this.update(STEP_MS);
+      this._accumulated -= STEP_MS;
+    }
+
+    // alpha tells renderer how far we are between the last two logic frames
+    const alpha = this._accumulated / STEP_MS;
+    this.render(alpha);
+
+    this._rafId = requestAnimationFrame(this._tick.bind(this));
+  }
+}
+
+// ═══ input/motionBuffer.js ═══════════════════════════════════
+// Directional input buffer for special move detection.
+// Stores per-frame directional inputs in numpad notation (relative to facing):
+//   5=neutral, 2=down, 8=up, 4=back, 6=fwd, 1=down-back, 3=down-fwd, 7=up-back, 9=up-fwd
+
+const BUFFER_FRAMES = 60; // how many frames of history to keep
+
+function createMotionBuffer() {
+  return {
+    dirs: [],        // string[], one entry per logic frame
+    currentFrame: 0,
+  };
+}
+
+/** Call once per logic frame before state machine runs. */
+function recordInput(buf, input, facing) {
+  buf.dirs.push(getNumpad(input, facing));
+  if (buf.dirs.length > BUFFER_FRAMES) buf.dirs.shift();
+  buf.currentFrame++;
+}
+
+/**
+ * Check if a numpad motion sequence appears in the last maxAge frames.
+ * sequence: string like '236', '623', '214'
+ * Returns true if the sequence is found (sub-sequence match, skipping irrelevant frames).
+ */
+function checkMotion(buf, sequence, maxAge = 16) {
+  const recent = buf.dirs.slice(-maxAge);
+  let si = 0;
+  for (const d of recent) {
+    if (d === sequence[si]) {
+      si++;
+      if (si >= sequence.length) return true;
+    }
+  }
+  return false;
+}
+
+/** Convert raw input to numpad direction, relative to facing direction. */
+function getNumpad(input, facing) {
+  const fwd  = facing === 1 ? input.right : input.left;
+  const back = facing === 1 ? input.left  : input.right;
+  const down = input.down;
+  const up   = input.up;
+
+  if (down && fwd)  return '3';
+  if (down && back) return '1';
+  if (up   && fwd)  return '9';
+  if (up   && back) return '7';
+  if (down)         return '2';
+  if (up)           return '8';
+  if (fwd)          return '6';
+  if (back)         return '4';
+  return '5';
+}
+
+// ═══ input/keyboard.js ═══════════════════════════════════
+// Raw keyboard state + per-frame edge detection.
+// getInputState(playerId) returns a plain object that the fighter state machine
+// consumes — the same shape the AI controller will produce in Phase 5.
+//
+// Control scheme (Phase 2+):
+//   P1: WASD movement | F=LP  G=MP  H=HP  R=LK  T=MK  Y=HK
+//   P2: Arrow movement | J=LP  K=MP  L=HP  U=LK  I=MK  O=HK
+//   ` (backtick) = hitbox debug toggle
+//   ESC = pause
+
+const held        = new Set();
+const justPressed  = new Set();
+const justReleased = new Set();
+
+const BINDINGS = {
+  1: { left:'KeyA', right:'KeyD', up:'KeyW', down:'KeyS',
+       lp:'KeyF', mp:'KeyG', hp:'KeyH', lk:'KeyR', mk:'KeyT', hk:'KeyY' },
+  2: { left:'ArrowLeft', right:'ArrowRight', up:'ArrowUp', down:'ArrowDown',
+       lp:'KeyJ', mp:'KeyK', hp:'KeyL', lk:'KeyU', mk:'KeyI', hk:'KeyO' },
+};
+
+window.addEventListener('keydown', e => {
+  if (!held.has(e.code)) justPressed.add(e.code);
+  held.add(e.code);
+  // Prevent arrow keys from scrolling the page
+  if (e.code.startsWith('Arrow')) e.preventDefault();
+});
+
+window.addEventListener('keyup', e => {
+  held.delete(e.code);
+  justReleased.add(e.code);
+});
+
+/** Call once per logic frame to clear edge-detection sets. */
+function flushInput() {
+  justPressed.clear();
+  justReleased.clear();
+}
+
+/**
+ * Returns the current input state for a player.
+ * Held fields (left/right/etc.) are true while key is down.
+ * *Pressed fields are true ONLY on the frame the key went down.
+ */
+function getInputState(playerId) {
+  const b = BINDINGS[playerId];
+  return {
+    left:  held.has(b.left),
+    right: held.has(b.right),
+    up:    held.has(b.up),
+    down:  held.has(b.down),
+    lp:    held.has(b.lp),
+    mp:    held.has(b.mp),
+    hp:    held.has(b.hp),
+    lk:    held.has(b.lk),
+    mk:    held.has(b.mk),
+    hk:    held.has(b.hk),
+
+    lpPressed: justPressed.has(b.lp),
+    mpPressed: justPressed.has(b.mp),
+    hpPressed: justPressed.has(b.hp),
+    lkPressed: justPressed.has(b.lk),
+    mkPressed: justPressed.has(b.mk),
+    hkPressed: justPressed.has(b.hk),
+    upPressed: justPressed.has(b.up),
+  };
+}
+
+/** True if a raw key code was just pressed this frame (for system keys). */
+function wasPressed(code) {
+  return justPressed.has(code);
+}
+
+// ═══ game/stage.js ═══════════════════════════════════
+// Procedural stage: gradient sky, silhouette horizon, parallax layers, floor.
+
+// Silhouette buildings on the horizon — defined as rectangles
+const BUILDINGS = [
+  { x: 30,  w: 45, h: 70 },
+  { x: 85,  w: 30, h: 50 },
+  { x: 125, w: 60, h: 90 },
+  { x: 195, w: 25, h: 45 },
+  { x: 230, w: 50, h: 75 },
+  { x: 290, w: 35, h: 60 },
+  { x: 340, w: 70, h: 100 },
+  { x: 420, w: 40, h: 65 },
+  { x: 470, w: 55, h: 80 },
+  { x: 535, w: 30, h: 50 },
+  { x: 575, w: 45, h: 70 },
+];
+
+// Crowd silhouette row — simple bumps
+function drawCrowd(ctx) {
+  ctx.fillStyle = '#1a0a2e';
+  const y = FLOOR_Y - 10;
+  for (let x = STAGE_LEFT; x < STAGE_RIGHT; x += 12) {
+    const offset = Math.sin(x * 0.3) * 3;
+    ctx.beginPath();
+    ctx.ellipse(x, y + offset, 6, 8, 0, Math.PI, 0);
+    ctx.fill();
+  }
+}
+
+function drawStage(ctx) {
+  const W = 640, H = 360;
+
+  // ── Sky gradient ──────────────────────────────────────────────
+  const sky = ctx.createLinearGradient(0, 0, 0, FLOOR_Y);
+  sky.addColorStop(0,    '#0d0030');
+  sky.addColorStop(0.4,  '#2b0060');
+  sky.addColorStop(0.75, '#7a1a8a');
+  sky.addColorStop(1,    '#d45a00');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, FLOOR_Y);
+
+  // ── Distant glow / sun ────────────────────────────────────────
+  const sunGrad = ctx.createRadialGradient(320, FLOOR_Y - 20, 0, 320, FLOOR_Y - 20, 80);
+  sunGrad.addColorStop(0,   'rgba(255,200,50,0.6)');
+  sunGrad.addColorStop(0.5, 'rgba(255,80,0,0.2)');
+  sunGrad.addColorStop(1,   'rgba(255,80,0,0)');
+  ctx.fillStyle = sunGrad;
+  ctx.fillRect(0, 0, W, FLOOR_Y);
+
+  // ── Horizon silhouette buildings ──────────────────────────────
+  ctx.fillStyle = '#12003a';
+  const horizonY = FLOOR_Y - 30;
+  for (const b of BUILDINGS) {
+    ctx.fillRect(b.x, horizonY - b.h, b.w, b.h);
+  }
+
+  // Window lights on buildings (tiny dots)
+  ctx.fillStyle = 'rgba(255,240,100,0.7)';
+  for (const b of BUILDINGS) {
+    for (let wy = horizonY - b.h + 8; wy < horizonY - 6; wy += 10) {
+      for (let wx = b.x + 5; wx < b.x + b.w - 4; wx += 8) {
+        if (Math.sin(wx * 13 + wy * 7) > 0.2) {
+          ctx.fillRect(wx, wy, 2, 2);
+        }
+      }
+    }
+  }
+
+  // ── Crowd row ─────────────────────────────────────────────────
+  drawCrowd(ctx);
+
+  // ── Floor ─────────────────────────────────────────────────────
+  // Main floor surface
+  const floorGrad = ctx.createLinearGradient(0, FLOOR_Y, 0, H);
+  floorGrad.addColorStop(0, '#3a1a00');
+  floorGrad.addColorStop(1, '#1a0800');
+  ctx.fillStyle = floorGrad;
+  ctx.fillRect(0, FLOOR_Y, W, H - FLOOR_Y);
+
+  // Floor highlight stripe
+  ctx.fillStyle = 'rgba(255,140,0,0.3)';
+  ctx.fillRect(0, FLOOR_Y, W, 3);
+
+  // Floor tiles (subtle)
+  ctx.strokeStyle = 'rgba(255,100,0,0.15)';
+  ctx.lineWidth = 1;
+  for (let x = STAGE_LEFT; x <= STAGE_RIGHT; x += 40) {
+    ctx.beginPath();
+    ctx.moveTo(x, FLOOR_Y);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+}
+
+// ═══ game/round.js ═══════════════════════════════════
+// Round lifecycle: INTRO → FIGHT → KO → RESULT → (restart)
+
+const PHASE = {
+  INTRO:   'INTRO',
+  FIGHT:   'FIGHT',
+  KO:      'KO',
+  RESULT:  'RESULT',
+};
+
+const INTRO_DURATION  = 180; // 3 s at 60fps
+const KO_FREEZE       = 60;  // 1 s freeze on KO
+const RESULT_DURATION = 180; // 3 s result screen
+const ROUND_TIME_SECS = 99;
+
+function createRound() {
+  return {
+    phase:       PHASE.INTRO,
+    phaseTimer:  INTRO_DURATION,
+    roundNumber: 1,
+    timeLeft:    ROUND_TIME_SECS * 60, // in frames
+    winner:      null, // 1, 2, or 'draw'
+  };
+}
+
+/**
+ * Advance round state each logic tick.
+ * fighters: [f1, f2]
+ * Returns updated round object (mutates in place for simplicity).
+ */
+function updateRound(round, fighters) {
+  switch (round.phase) {
+    case PHASE.INTRO:
+      round.phaseTimer--;
+      if (round.phaseTimer <= 0) {
+        round.phase = PHASE.FIGHT;
+      }
+      break;
+
+    case PHASE.FIGHT:
+      // Count down timer
+      round.timeLeft--;
+
+      // Check for KO
+      for (const f of fighters) {
+        if (f.state === STATE.KO) {
+          round.phase = PHASE.KO;
+          round.phaseTimer = KO_FREEZE;
+          // Winner is the OTHER fighter
+          round.winner = f.id === 1 ? 2 : 1;
+          return;
+        }
+      }
+
+      // Time-out
+      if (round.timeLeft <= 0) {
+        round.phase = PHASE.KO;
+        round.phaseTimer = KO_FREEZE;
+        const [f1, f2] = fighters;
+        if (f1.hp > f2.hp) round.winner = 1;
+        else if (f2.hp > f1.hp) round.winner = 2;
+        else round.winner = 'draw';
+      }
+      break;
+
+    case PHASE.KO:
+      round.phaseTimer--;
+      if (round.phaseTimer <= 0) {
+        round.phase = PHASE.RESULT;
+        round.phaseTimer = RESULT_DURATION;
+      }
+      break;
+
+    case PHASE.RESULT:
+      round.phaseTimer--;
+      // main.js will detect phase === RESULT and phaseTimer <= 0 to restart
+      break;
+  }
+}
+
+/** True when fighters are allowed to move / attack */
+function isFightActive(round) {
+  return round.phase === PHASE.FIGHT;
+}
+
+/** Seconds remaining (for UI display) */
+function getTimeSeconds(round) {
+  return Math.ceil(round.timeLeft / 60);
+}
+
+// ═══ characters/backbender.js ═══════════════════════════════════
+// The Backbender — balanced all-rounder, the Ryu of the roster.
+// Identity: backbend stances and chest-stand attacks.
+// Pure data file — zero imports, zero logic.
+
+const Backbender = {
+
+  // ── Stats ─────────────────────────────────────────────────────────────────
+  stats: {
+    health:       1000,
+    walkSpeed:    2.8,
+    jumpHeight:   13.5,   // initial vy magnitude (positive; applied as negative)
+    weight:       1.0,    // knockback multiplier
+    stunThreshold: 400,   // total hit-stun damage before dizzy (Phase 4+)
+    width:        30,
+    height:       72,
+  },
+
+  // ── Default hurtboxes ────────────────────────────────────────────────────
+  // ox/oy: offset from fighter bottom-centre (ox flipped by facing)
+  // oy=0 → top of box is at the top of the fighter
+  defaultHurtboxes: {
+    stand:  [{ ox: 0, oy:  0, w: 28, h: 72 }],
+    crouch: [{ ox: 0, oy: 30, w: 32, h: 42 }],
+    air:    [{ ox: 0, oy:  6, w: 26, h: 60 }],
+  },
+
+  // ── Move list ─────────────────────────────────────────────────────────────
+  // All moves are defined here even if not yet wired in the state machine.
+  // startup  = frames before first active frame (0-indexed from state entry)
+  // active   = hitbox-live frames
+  // recovery = frames after last active frame
+  // total    = startup + active + recovery
+  //
+  // cancelWindow  = [firstFrame, lastFrame] within which cancel is possible
+  // chainCancelInto  = moves you can normal-cancel into
+  // specialCancelInto = moves you can special-cancel into
+  //
+  // hurtboxOverrides = { frameN: [...boxes] } sparse map for contortion shapes
+  // invulnFrames = [start, end] frames where fighter is fully invincible
+  //
+  // onHit / onBlock = frame advantage (positive = attacker advantage)
+  //
+  // properties: array of flags — 'overhead','low','knockdown','launcher',
+  //             'low_profile','anti_air'
+
+  moves: {
+
+    // ── Standing normals ──────────────────────────────────────────────────
+
+    light_punch: {
+      notation:  '5LP',
+      startup:   3,
+      active:    2,
+      recovery:  7,     // total: 12
+      hitboxes: [{
+        ox: 22, oy: 10, w: 28, h: 24,
+        damage:    80,
+        hitstun:   14,
+        blockstun: 10,
+        knockback: { x: 3.0, y: 0 },
+        blockType: 'mid',
+      }],
+      hurtboxOverrides: null,
+      chainCancelInto:   ['light_kick', 'medium_punch'],
+      specialCancelInto: ['backbend_shot', 'spine_spike'],
+      cancelWindow: [3, 8],
+      properties: [],
+      onHit: 2, onBlock: -2,
+    },
+
+    medium_punch: {
+      notation:  '5MP',
+      startup:   6,
+      active:    3,
+      recovery:  12,    // total: 21
+      hitboxes: [{
+        ox: 28, oy: 6, w: 34, h: 26,
+        damage:    130,
+        hitstun:   18,
+        blockstun: 14,
+        knockback: { x: 4.0, y: 0 },
+        blockType: 'mid',
+      }],
+      // Backbend pose: upper hurtbox retreats during this move (step 8)
+      hurtboxOverrides: null,
+      chainCancelInto:   ['heavy_punch'],
+      specialCancelInto: ['backbend_shot', 'spine_spike'],
+      cancelWindow: [6, 16],
+      properties: [],
+      onHit: 0, onBlock: -4,
+    },
+
+    heavy_punch: {
+      notation:  '5HP',
+      startup:   10,
+      active:    4,
+      recovery:  20,    // total: 34
+      hitboxes: [{
+        ox: 24, oy: 2, w: 38, h: 32,
+        damage:    220,
+        hitstun:   26,
+        blockstun: 20,
+        knockback: { x: 6.5, y: 0 },
+        blockType: 'mid',
+        // Chest-stand pose — big horizontal reach
+      }],
+      hurtboxOverrides: null,
+      chainCancelInto:   [],
+      specialCancelInto: ['spine_spike'],
+      cancelWindow: [10, 18],
+      properties: ['knockdown'],
+      onHit: -4, onBlock: -12,
+    },
+
+    light_kick: {
+      notation:  '5LK',
+      startup:   4,
+      active:    2,
+      recovery:  8,     // total: 14
+      hitboxes: [{
+        ox: 20, oy: 32, w: 30, h: 20,
+        damage:    70,
+        hitstun:   12,
+        blockstun:  8,
+        knockback: { x: 2.5, y: 0 },
+        blockType: 'mid',
+      }],
+      hurtboxOverrides: null,
+      chainCancelInto:   ['medium_kick'],
+      specialCancelInto: [],
+      cancelWindow: [4, 10],
+      properties: [],
+      onHit: 0, onBlock: -3,
+    },
+
+    medium_kick: {
+      notation:  '5MK',
+      startup:   7,
+      active:    4,
+      recovery:  14,    // total: 25  — oversplit kick, long range
+      hitboxes: [{
+        ox: 36, oy: 26, w: 40, h: 24,
+        damage:    150,
+        hitstun:   20,
+        blockstun: 16,
+        knockback: { x: 5.0, y: 0 },
+        blockType: 'mid',
+      }],
+      hurtboxOverrides: null,
+      chainCancelInto:   ['heavy_kick'],
+      specialCancelInto: ['backbend_shot', 'spine_spike'],
+      cancelWindow: [7, 18],
+      properties: [],
+      onHit: 0, onBlock: -2,
+    },
+
+    heavy_kick: {
+      notation:  '5HK',
+      startup:   12,
+      active:    4,
+      recovery:  18,    // total: 34  — falling axe kick, overhead
+      hitboxes: [{
+        ox: 16, oy: 0, w: 28, h: 36,
+        damage:    200,
+        hitstun:   24,
+        blockstun: 18,
+        knockback: { x: 4.0, y: 0 },
+        blockType: 'high',   // OVERHEAD — must be blocked standing
+      }],
+      // Inverted backbend hurtbox — retreats upper body (step 8)
+      hurtboxOverrides: null,
+      chainCancelInto:   [],
+      specialCancelInto: [],
+      cancelWindow: [12, 20],
+      properties: ['overhead'],
+      onHit: -2, onBlock: -10,
+    },
+
+    // ── Crouching normals ──────────────────────────────────────────────────
+
+    '2lp': {
+      notation:  '2LP',
+      startup:   3,
+      active:    2,
+      recovery:  7,     // total: 12
+      hitboxes: [{
+        ox: 20, oy: 36, w: 26, h: 20,
+        damage:    70,
+        hitstun:   12,
+        blockstun:  8,
+        knockback: { x: 2.5, y: 0 },
+        blockType: 'low',
+      }],
+      hurtboxOverrides: null,
+      chainCancelInto:   ['2mk'],
+      specialCancelInto: ['backbend_shot'],
+      cancelWindow: [3, 8],
+      properties: ['low'],
+      onHit: 2, onBlock: -1,
+    },
+
+    '2mk': {
+      notation:  '2MK',
+      startup:   8,
+      active:    3,
+      recovery:  22,    // total: 33  — long recovery, punishable on whiff
+      hitboxes: [{
+        ox: 34, oy: 50, w: 44, h: 18,
+        damage:    110,
+        hitstun:   20,
+        blockstun: 14,
+        knockback: { x: 5.0, y: 0 },
+        blockType: 'low',    // must be blocked low
+      }],
+      // Recovery pose: fold with stretched hurtbox (step 8)
+      hurtboxOverrides: null,
+      chainCancelInto:   [],
+      specialCancelInto: [],
+      cancelWindow: [],
+      properties: ['low', 'knockdown'],
+      onHit: -4, onBlock: -14,
+    },
+
+    '2hp': {
+      notation:  '2HP',
+      startup:   7,
+      active:    4,
+      recovery:  14,    // total: 25  — anti-air chest stand
+      hitboxes: [{
+        ox: 10, oy: -10, w: 32, h: 40,  // negative oy = above normal standing height
+        damage:    180,
+        hitstun:   22,
+        blockstun: 16,
+        knockback: { x: 2.0, y: -6 },   // launcher: sends opponent upward
+        blockType: 'mid',
+      }],
+      // Chest-stand hurtbox: low and forward (step 8)
+      hurtboxOverrides: null,
+      chainCancelInto:   [],
+      specialCancelInto: ['spine_spike'],
+      cancelWindow: [7, 14],
+      properties: ['anti_air', 'launcher'],
+      onHit: -2, onBlock: -8,
+    },
+
+    // ── Air normals ────────────────────────────────────────────────────────
+
+    j_mp: {
+      notation:  'j.MP',
+      startup:   5,
+      active:    4,
+      recovery:  8,     // total: 17
+      hitboxes: [{
+        ox: 20, oy: 18, w: 30, h: 26,
+        damage:    110,
+        hitstun:   16,
+        blockstun: 12,
+        knockback: { x: 3.0, y: 1.5 },
+        blockType: 'mid',
+      }],
+      hurtboxOverrides: null,
+      chainCancelInto:   [],
+      specialCancelInto: [],
+      cancelWindow: [],
+      properties: [],
+      onHit: 0, onBlock: -4,
+    },
+
+    j_hk: {
+      notation:  'j.HK',
+      startup:   8,
+      active:    5,
+      recovery:  10,    // total: 23  — diving kick from piked position, overhead
+      hitboxes: [{
+        ox: 14, oy: 28, w: 26, h: 34,
+        damage:    160,
+        hitstun:   20,
+        blockstun: 14,
+        knockback: { x: 4.0, y: 2.0 },
+        blockType: 'high',   // overhead
+      }],
+      hurtboxOverrides: null,
+      chainCancelInto:   [],
+      specialCancelInto: [],
+      cancelWindow: [],
+      properties: ['overhead'],
+      onHit: -2, onBlock: -8,
+    },
+
+    // ── Special moves ──────────────────────────────────────────────────────
+
+    backbend_shot: {
+      notation:    '236P',
+      startup:     14,      // bends back, then fires
+      active:      0,       // projectile handles its own active frames
+      recovery:    20,      // total: 34  (projectile spawned on frame 14)
+      spawnProjectileOnFrame: 14,
+      hitboxes:    [],      // no direct hitbox — damage is on the projectile
+      hurtboxOverrides: {
+        // Frames 8-13: backbend pose — upper hurtbox retreats (step 8)
+      },
+      chainCancelInto:   [],
+      specialCancelInto: [],
+      cancelWindow: [],
+      properties: [],
+      onHit: -2, onBlock: -8,
+
+      // Projectile definition — instantiated by the engine when this move fires
+      projectile: {
+        speed:    { lp: 5.0, mp: 6.5, hp: 8.0 },  // varies by button strength
+        damage:   { lp: 80,  mp: 110, hp: 140 },
+        hitstun:  18,
+        blockstun: 12,
+        knockback: { x: 3.0, y: 0 },
+        size:      { w: 20, h: 20 },
+        maxTravelX: 600,
+      },
+    },
+
+    spine_spike: {
+      notation:    '623P',
+      startup:     5,
+      active:      8,
+      recovery:    24,    // total: 37  — rises in a chest-stand arc
+      hitboxes: [
+        // First active frames: upper body spike
+        { ox: 10, oy: -8, w: 28, h: 36, damage: 90,  hitstun: 18, blockstun: 14,
+          knockback: { x: 2.0, y: -5 }, blockType: 'mid' },
+        // Later active frames: coming down
+        { ox: 16, oy: 4, w: 24, h: 30, damage: 60, hitstun: 14, blockstun: 10,
+          knockback: { x: 3.0, y: 0 }, blockType: 'mid' },
+      ],
+      // LP version: fully invincible frames 0-4 (startup), fast recovery
+      // HP version: invincible frames 0-2, slow recovery
+      invulnFrames: [0, 4],   // full invuln during startup (LP version)
+      hurtboxOverrides: null, // step 8: chest-stand hurtbox while rising
+      chainCancelInto:   [],
+      specialCancelInto: [],
+      cancelWindow: [],
+      properties: ['anti_air'],
+      onHit: -8, onBlock: -20,
+    },
+  },
+
+  // ── State list ───────────────────────────────────────────────────────────
+  // Non-attack states only — attack states are auto-generated from moves.
+  // Transition priority is declared; the engine checks them in order.
+  states: {
+    IDLE:       { transitions: ['special', 'attack', 'jump', 'crouch', 'walk', 'block'] },
+    WALK_F:     { transitions: ['special', 'attack', 'jump', 'crouch', 'idle', 'block'] },
+    WALK_B:     { transitions: ['special', 'attack', 'jump', 'crouch', 'idle', 'block'] },
+    JUMP_N:     { transitions: ['air_attack', 'land'] },
+    JUMP_F:     { transitions: ['air_attack', 'land'] },
+    JUMP_B:     { transitions: ['air_attack', 'land'] },
+    CROUCH:     { transitions: ['special', 'attack', 'rise', 'block'] },
+    BLOCK_HIGH: { transitions: ['unblock'] },
+    BLOCK_LOW:  { transitions: ['unblock'] },
+    HITSTUN:    { transitions: ['frame_end'] },
+    BLOCKSTUN:  { transitions: ['frame_end'] },
+    KNOCKDOWN:  { transitions: ['frame_end'] },
+    GETUP:      { transitions: ['frame_end'] },
+    KO:         { transitions: [] },
+  },
+
+  // ── Pose data ────────────────────────────────────────────────────────────
+  // Stick-figure limb positions for the renderer.
+  // Per state — attack poses are per-frame arrays (filled in step 4+).
+  // Format: { head:{ox,oy}, joints: { armR:[...], armL:[...], legR:[...], legL:[...] } }
+  // All coords relative to fighter bottom-centre, y-axis UP (y=-72 = top of standing figure).
+  // null = fall back to fighterRenderer built-in poses.
+  poses: {
+    IDLE:    null,
+    WALK_F:  null,
+    WALK_B:  null,
+    JUMP_N:  null,
+    JUMP_F:  null,
+    JUMP_B:  null,
+    CROUCH:  null,
+    HITSTUN: null,
+    KO:      null,
+  },
+};
+
+// ═══ characters/characterBase.js ═══════════════════════════════════
+// Character runtime engine.
+// createFighterInstance() builds the mutable runtime state from a pure-data character def.
+// updateFighter() advances one logic frame.
+// applyHit() applies hit or block outcome to a defender.
+//
+// Adding a new character: create one file in /characters/, call createFighterInstance() in main.js.
+// No engine changes required.
+
+
+
+// ─── Factory ──────────────────────────────────────────────────────────────────
+
+/**
+ * Create a mutable runtime fighter from a character definition.
+ * config: { id, name, color, x, facing }
+ */
+function createFighterInstance(characterDef, config) {
+  const stats = characterDef.stats;
+  return {
+    // Identity
+    characterDef,
+    id:      config.id,
+    name:    config.name,
+    color:   config.color,
+
+    // World position (bottom-centre origin)
+    x:       config.x,
+    y:       FLOOR_Y,
+    prevX:   config.x,
+    prevY:   FLOOR_Y,
+    vx:      0,
+    vy:      0,
+    w:       stats.width,
+    h:       stats.height,
+    facing:  config.facing,
+    onGround: true,
+
+    // State machine
+    state:       STATE.IDLE,
+    stateFrame:  0,       // counts up from 0 on first frame of this state
+    attackMove:  null,    // move name when in an ATK_ state
+
+    // Combat
+    hp:              stats.health,
+    maxHp:           stats.health,
+    hitstunDuration: 0,
+    blockstunDuration: 0,
+
+    // Per-frame computed (rebuilt every tick)
+    hitboxes:  [],
+    hurtboxes: [],
+
+    // Cancel flags (set during active/recovery of an attack)
+    canChainCancel:   false,
+    canSpecialCancel: false,
+
+    // For debug display
+    lastHitAdvantage: null,   // frame advantage on last hit/block outcome
+  };
+}
+
+// ─── Main update ──────────────────────────────────────────────────────────────
+
+/**
+ * Advance one fighter by one logic tick.
+ * motionBuf: the fighter's own motion buffer (from motionBuffer.js)
+ */
+function updateFighter(fighter, input, opponent, motionBuf) {
+  fighter.prevX = fighter.x;
+  fighter.prevY = fighter.y;
+  fighter.hitboxes       = [];
+  fighter.canChainCancel   = false;
+  fighter.canSpecialCancel = false;
+
+  // Auto-update facing toward opponent (locked during KO / knockdown)
+  if (!isFacingLocked(fighter.state)) {
+    fighter.facing = opponent.x > fighter.x ? 1 : -1;
+  }
+
+  // Record directional input for motion detection
+  recordInput(motionBuf, input, fighter.facing);
+
+  // Frame-count-based auto-transitions (runs at start of each frame)
+  autoTransition(fighter);
+
+  // State-specific logic
+  const s = fighter.state;
+  if (isGroundState(s)) {
+    handleGround(fighter, input, motionBuf);
+  } else if (isAirState(s)) {
+    handleAir(fighter, input, motionBuf);
+  } else if (s === STATE.HITSTUN) {
+    fighter.vx *= 0.75;    // decay knockback velocity
+  } else if (s === STATE.KO) {
+    fighter.vx *= 0.85;
+  } else if (isAttackState(s)) {
+    handleAttack(fighter, input, motionBuf);
+  }
+  // BLOCK_HIGH, BLOCK_LOW, BLOCKSTUN, KNOCKDOWN, GETUP: passive (autoTransition handles end)
+
+  // Compute this frame's hitboxes and hurtboxes
+  fighter.hitboxes  = computeHitboxes(fighter);
+  fighter.hurtboxes = computeHurtboxes(fighter);
+
+  // Advance frame counter (after all logic — frame 0 is the first frame in this state)
+  fighter.stateFrame++;
+
+  // Physics integration
+  integratePhysics(fighter, fighter.characterDef.stats);
+}
+
+// ─── Auto-transitions ─────────────────────────────────────────────────────────
+// These fire at the START of each frame, before state logic, so the new state
+// gets to run its handler in the same frame (e.g. you can act on landing frame).
+
+function autoTransition(fighter) {
+// [bundled: const s = fighter.state;]
+
+  // Landing: air → ground
+  if (isAirState(s) && fighter.onGround) {
+    transitionTo(fighter, STATE.IDLE);
+    fighter.vx = 0;
+    return;
+  }
+
+  // Attack end
+  if (isAttackState(s)) {
+// [bundled: const move = getMove(fighter);]
+    if (move) {
+      const total = move.startup + move.active + move.recovery;
+      if (fighter.stateFrame >= total) {
+        transitionTo(fighter, STATE.IDLE);
+        fighter.vx = 0;
+      }
+    }
+    return;
+  }
+
+  // Hitstun end
+  if (s === STATE.HITSTUN && fighter.stateFrame >= fighter.hitstunDuration) {
+    transitionTo(fighter, fighter.onGround ? STATE.IDLE : STATE.JUMP_N);
+    fighter.vx = 0;
+    return;
+  }
+
+  // Blockstun end
+  if (s === STATE.BLOCKSTUN && fighter.stateFrame >= fighter.blockstunDuration) {
+    transitionTo(fighter, fighter.onGround ? STATE.IDLE : STATE.JUMP_N);
+    fighter.vx = 0;
+    return;
+  }
+}
+
+// ─── State handlers ───────────────────────────────────────────────────────────
+
+function handleGround(fighter, input, motionBuf) {
+  if (fighter.state === STATE.CROUCH) {
+    // Rise from crouch
+    if (!input.down) {
+      transitionTo(fighter, STATE.IDLE);
+    } else {
+      fighter.vx = 0;
+      // Crouch attack checks (added step 4)
+      if (input.lpPressed && tryStartAttack(fighter, '2lp'))  return;
+      if (input.mkPressed && tryStartAttack(fighter, '2mk'))  return;
+      if (input.hpPressed && tryStartAttack(fighter, '2hp'))  return;
+      return;
+    }
+  }
+
+  // --- Special moves (checked before normals) ---
+  // (wired in step 6 — motion checks go here)
+
+  // --- Normal attacks ---
+  if (input.lpPressed && tryStartAttack(fighter, 'light_punch'))   return;
+  if (input.mpPressed && tryStartAttack(fighter, 'medium_punch'))  return;
+  if (input.hpPressed && tryStartAttack(fighter, 'heavy_punch'))   return;
+  if (input.lkPressed && tryStartAttack(fighter, 'light_kick'))    return;
+  if (input.mkPressed && tryStartAttack(fighter, 'medium_kick'))   return;
+  if (input.hkPressed && tryStartAttack(fighter, 'heavy_kick'))    return;
+
+  // --- Jump ---
+  if (input.upPressed && fighter.onGround) {
+    const dx = input.right ? 1 : input.left ? -1 : 0;
+    fighter.vy = -fighter.characterDef.stats.jumpHeight;
+    fighter.vx = dx * fighter.characterDef.stats.walkSpeed;
+    if (dx === 0)                     transitionTo(fighter, STATE.JUMP_N);
+    else if (dx === fighter.facing)   transitionTo(fighter, STATE.JUMP_F);
+    else                              transitionTo(fighter, STATE.JUMP_B);
+    return;
+  }
+
+  // --- Crouch ---
+  if (input.down && !input.up) {
+    if (fighter.state !== STATE.CROUCH) transitionTo(fighter, STATE.CROUCH);
+    fighter.vx = 0;
+    return;
+  }
+
+  // --- Walk ---
+  const ws = fighter.characterDef.stats.walkSpeed;
+  if (input.right && !input.left) {
+    fighter.vx = ws;
+    fighter.state = fighter.facing === 1 ? STATE.WALK_F : STATE.WALK_B;
+  } else if (input.left && !input.right) {
+    fighter.vx = -ws;
+    fighter.state = fighter.facing === -1 ? STATE.WALK_F : STATE.WALK_B;
+  } else {
+    fighter.vx = 0;
+    fighter.state = STATE.IDLE;
+  }
+}
+
+function handleAir(fighter, input, motionBuf) {
+  // Air drift
+// [bundled: const ws = fighter.characterDef.stats.walkSpeed;]
+  if (input.right)      fighter.vx = ws;
+  else if (input.left)  fighter.vx = -ws;
+  else                  fighter.vx *= 0.85;
+
+  // Air attacks (wired in step 4)
+  if (input.mpPressed && tryStartAttack(fighter, 'j_mp')) return;
+  if (input.hkPressed && tryStartAttack(fighter, 'j_hk')) return;
+}
+
+function handleAttack(fighter, input, motionBuf) {
+// [bundled: const move = getMove(fighter);]
+  if (!move) return;
+
+  const sf = fighter.stateFrame;
+
+  // Update cancel flags
+  if (move.cancelWindow) {
+    const [cs, ce] = move.cancelWindow;
+    const inWindow = sf >= cs && sf <= ce;
+    fighter.canChainCancel   = inWindow && (move.chainCancelInto?.length   > 0);
+    fighter.canSpecialCancel = inWindow && (move.specialCancelInto?.length > 0);
+  }
+
+  // Chain cancel into another normal (step 5)
+  // Special cancel into special (step 6)
+
+  // Ground attacks lock horizontal movement
+  if (fighter.onGround) fighter.vx = 0;
+}
+
+// ─── Combat ───────────────────────────────────────────────────────────────────
+
+/**
+ * Apply a hit (or block) to a defender.
+ * hit: result from collision.checkHit — contains hit.data (the hitbox definition)
+ * attacker: used for knockback direction and advantage calculation
+ */
+function applyHit(defender, hit, attacker) {
+  if (defender.state === STATE.KO) return;
+
+  const md = hit.data;  // move hitbox data: damage, hitstun, knockback, blockType, etc.
+
+  // Blocking check — defender is blocking if in BLOCK_HIGH or BLOCK_LOW and the
+  // block type matches (high=overhead must be blocked high, low must be blocked low, mid=either)
+  const isBlocking = checkBlock(defender, md);
+
+  if (isBlocking) {
+    defender.blockstunDuration = md.blockstun ?? 12;
+    transitionTo(defender, STATE.BLOCKSTUN);
+    // Small push on block
+    defender.vx = (md.knockback.x * 0.4) * attacker.facing;
+    // Frame advantage = attacker recovery - defender blockstun (negative = defender's favour)
+    const attackMove = getMove(attacker);
+    if (attackMove) {
+      const attackerRecovery = attackMove.recovery;
+      const attackerFramesLeft = (attackMove.startup + attackMove.active + attackMove.recovery)
+        - attacker.stateFrame;
+      defender.lastHitAdvantage = -(attackerFramesLeft - defender.blockstunDuration);
+    }
+    return;
+  }
+
+  // Hit confirmed
+  defender.hp = Math.max(0, defender.hp - md.damage);
+  defender.hitstunDuration = md.hitstun ?? 18;
+  transitionTo(defender, STATE.HITSTUN);
+
+  // Knockback (x always pushes away from attacker, y for launchers)
+  defender.vx = md.knockback.x * attacker.facing;
+  defender.vy = md.knockback.y;
+
+  if (defender.hp <= 0) {
+    transitionTo(defender, STATE.KO);
+    defender.vx = md.knockback.x * attacker.facing * 1.5;
+    defender.vy = md.knockback.y - 4;
+  }
+}
+
+// ─── Hitbox / hurtbox computation ────────────────────────────────────────────
+
+function computeHitboxes(fighter) {
+  if (!isAttackState(fighter.state)) return [];
+
+// [bundled: const move = getMove(fighter);]
+  if (!move) return [];
+
+  const { startup, active } = move;
+// [bundled: const sf = fighter.stateFrame;]
+
+  // Only live during active frames
+  if (sf < startup || sf >= startup + active) return [];
+
+  // Per-active-frame hitbox (if move defines multiple, index into them)
+  const activeFrame = sf - startup;
+  const hbDef = move.hitboxes[Math.min(activeFrame, move.hitboxes.length - 1)];
+  return [{ ...hbDef }];
+}
+
+function computeHurtboxes(fighter) {
+  const def = fighter.characterDef;
+// [bundled: const s = fighter.state;]
+
+  // Choose base hurtbox set for current stance
+  let boxes;
+  if (s === STATE.CROUCH) {
+    boxes = def.defaultHurtboxes.crouch;
+  } else if (isAirState(s) || (isAttackState(s) && !fighter.onGround)) {
+    boxes = def.defaultHurtboxes.air;
+  } else {
+    boxes = def.defaultHurtboxes.stand;
+  }
+
+  // Per-frame overrides from move data (contortion hurtbox changes — step 8)
+  if (isAttackState(s)) {
+// [bundled: const move = getMove(fighter);]
+    if (move?.hurtboxOverrides) {
+      const override = move.hurtboxOverrides[fighter.stateFrame];
+      if (override) boxes = override;
+    }
+  }
+
+  return boxes;
+}
+
+// ─── Private helpers ──────────────────────────────────────────────────────────
+
+function transitionTo(fighter, newState) {
+  fighter.state      = newState;
+  fighter.stateFrame = 0;
+  fighter.attackMove = isAttackState(newState) ? getMoveFromState(newState) : null;
+}
+
+function tryStartAttack(fighter, moveName) {
+// [bundled: const move = fighter.characterDef.moves[moveName];]
+  if (!move) return false;  // move not yet defined in character data
+
+  // Air attacks only available in air; ground attacks only on ground
+  const requiresAir = moveName.startsWith('j_');
+  if (requiresAir && fighter.onGround)  return false;
+  if (!requiresAir && !fighter.onGround) return false;
+
+  transitionTo(fighter, attackState(moveName));
+  if (fighter.onGround) fighter.vx = 0;
+  return true;
+}
+
+function getMove(fighter) {
+  const moveName = isAttackState(fighter.state) ? getMoveFromState(fighter.state) : fighter.attackMove;
+  return moveName ? fighter.characterDef.moves[moveName] : null;
+}
+
+function checkBlock(defender, hitData) {
+  if (defender.state !== STATE.BLOCK_HIGH && defender.state !== STATE.BLOCK_LOW) return false;
+  const bt = hitData.blockType ?? 'mid';
+  if (bt === 'mid') return true;
+  if (bt === 'high' && defender.state === STATE.BLOCK_HIGH) return true;
+  if (bt === 'low'  && defender.state === STATE.BLOCK_LOW)  return true;
+  return false;
+}
+
+// ═══ render/postfx.js ═══════════════════════════════════
+// CRT scanline overlay + chromatic aberration pass.
+// Operates on the offscreen canvas by drawing on top of it.
+
+// [bundled: const W = 640, H = 360;]
+
+// Pre-build scanline pattern into an OffscreenCanvas once
+let _scanlinePattern = null;
+
+function getScanlinePattern(ctx) {
+  if (_scanlinePattern) return _scanlinePattern;
+
+  const oc = new OffscreenCanvas(2, 4);
+  const oc2 = oc.getContext('2d');
+  // Transparent top half, dark bottom half — gives interlaced look
+  oc2.fillStyle = 'rgba(0,0,0,0)';
+  oc2.fillRect(0, 0, 2, 2);
+  oc2.fillStyle = 'rgba(0,0,0,0.28)';
+  oc2.fillRect(0, 2, 2, 2);
+
+  _scanlinePattern = ctx.createPattern(oc, 'repeat');
+  return _scanlinePattern;
+}
+
+/**
+ * Apply CRT post-processing directly onto ctx.
+ * Call LAST in the render pass.
+ * aberrationOffset: how many pixels to shift R/B channels (default 1)
+ */
+function applyCRT(ctx, offscreen, aberrationOffset = 1) {
+  // ── Chromatic aberration ──────────────────────────────────────
+  // Draw the whole frame twice with composite ops to shift red + blue channels
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.25;
+
+  // Red channel shifted left
+  ctx.filter = 'url(#red-channel)'; // fallback: just tint + offset
+  ctx.drawImage(offscreen, -aberrationOffset, 0);
+
+  // Blue channel shifted right — cheap approximation without filter API
+  // We use a separate tinted draw with screen blend
+  ctx.restore();
+
+  // Real cheap aberration: draw the image twice at ±offset with colour tints
+  applyAberration(ctx, offscreen, aberrationOffset);
+
+  // ── Scanlines ────────────────────────────────────────────────
+  const pattern = getScanlinePattern(ctx);
+  ctx.fillStyle = pattern;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Vignette ─────────────────────────────────────────────────
+  const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.25, W / 2, H / 2, H * 0.75);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Screen gloss (top highlight) ─────────────────────────────
+  const gloss = ctx.createLinearGradient(0, 0, 0, H * 0.15);
+  gloss.addColorStop(0, 'rgba(255,255,255,0.04)');
+  gloss.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gloss;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function applyAberration(ctx, src, offset) {
+  // Red: shift left, multiply red channel
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.07;
+  // Tint canvas red by drawing with a red fill overlay + multiply
+  // Simplest approach: draw image offset, then mask with colour
+  ctx.drawImage(src, -offset, 0);
+  ctx.fillStyle = '#ff0000';
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+
+  // Blue: shift right
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.07;
+  ctx.drawImage(src, offset, 0);
+  ctx.fillStyle = '#0000ff';
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+
+// ═══ render/fighterRenderer.js ═══════════════════════════════════
+// Draws placeholder fighters: coloured rectangle body + stick-figure limbs.
+// Limb poses are keyed by state name; attack poses interpolate over startup→active→recovery.
+// Debug overlay (H key in Phase 1, now ` key) shows hitboxes, hurtboxes, state, frame data.
+
+
+const HITBOX_FILL    = 'rgba(255,  40,  40, 0.55)';
+const HURTBOX_FILL   = 'rgba( 40, 120, 255, 0.45)';
+const HITBOX_STROKE  = 'rgba(255,  80,  80, 0.95)';
+const HURTBOX_STROKE = 'rgba( 80, 160, 255, 0.95)';
+
+function drawFighter(ctx, fighter, alpha, showBoxes) {
+  const x = lerp(fighter.prevX, fighter.x, alpha);
+// [bundled: const y = lerp(fighter.prevY, fighter.y, alpha);]
+
+  ctx.save();
+  ctx.translate(x, y);
+  if (fighter.facing === -1) ctx.scale(-1, 1);
+
+  drawBody(ctx, fighter);
+  drawLimbs(ctx, fighter);
+
+  ctx.restore();
+
+  if (showBoxes) {
+    drawBoxes(ctx, fighter, alpha);
+    drawDebugText(ctx, fighter, alpha);
+  }
+}
+
+// ─── Body ─────────────────────────────────────────────────────────────────────
+
+function drawBody(ctx, fighter) {
+  const w = fighter.w;
+  const isCrouch = fighter.state === STATE.CROUCH;
+  const isHit    = fighter.state === STATE.HITSTUN;
+  const isKO     = fighter.state === STATE.KO;
+
+  const bodyH = isCrouch ? fighter.h * 0.55 : fighter.h;
+  const bodyY = -bodyH;
+
+  // Drop shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(0, -1, w * 0.6, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Flash white on hitstun
+  let color = fighter.color;
+  if (isHit && Math.floor(Date.now() / 60) % 2 === 0) color = '#ffffff';
+
+  ctx.fillStyle = color;
+  ctx.fillRect(-w / 2, bodyY, w, bodyH);
+
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(-w / 2, bodyY, w, bodyH);
+
+  // Highlight stripe
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillRect(-w / 2 + 2, bodyY + 4, w * 0.4, bodyH * 0.35);
+}
+
+// ─── Limbs ────────────────────────────────────────────────────────────────────
+
+function drawLimbs(ctx, fighter) {
+  ctx.strokeStyle = darken(fighter.color, 0.55);
+  ctx.lineCap = 'round';
+
+// [bundled: const s = fighter.state;]
+
+  if      (s === STATE.IDLE)                       poseIdle(ctx, fighter);
+  else if (s === STATE.WALK_F || s === STATE.WALK_B) poseWalk(ctx, fighter);
+  else if (isAirState(s))                           poseJump(ctx, fighter);
+  else if (s === STATE.CROUCH)                      poseCrouch(ctx, fighter);
+  else if (s === STATE.HITSTUN)                     poseHitstun(ctx, fighter);
+  else if (s === STATE.KO)                          poseKO(ctx, fighter);
+  else if (isAttackState(s))                        poseAttack(ctx, fighter);
+  else                                              poseIdle(ctx, fighter);
+}
+
+function poseIdle(ctx, f) {
+  drawHead(ctx, f, 0, -f.h + 10);
+  line(ctx, 0, -f.h + 22, 0, -f.h * 0.42);
+  line(ctx, 0, -f.h + 28, 14, -f.h + 44);
+  line(ctx, 0, -f.h + 28, -10, -f.h + 46);
+  line(ctx, 0, -f.h * 0.42, 10, -16);
+  line(ctx, 10, -16, 12, 0);
+  line(ctx, 0, -f.h * 0.42, -8, -16);
+  line(ctx, -8, -16, -10, 0);
+}
+
+function poseWalk(ctx, f) {
+  const t = Date.now() / 120;
+  const swing = Math.sin(t) * 12;
+  drawHead(ctx, f, Math.sin(t) * 1, -f.h + 10);
+  line(ctx, 0, -f.h + 22, 0, -f.h * 0.42);
+  line(ctx, 0, -f.h + 28, 14 + swing, -f.h + 44);
+  line(ctx, 0, -f.h + 28, -10 - swing, -f.h + 46);
+  line(ctx, 0, -f.h * 0.42, 10 + swing, -16);
+  line(ctx, 10 + swing, -16, 12 + swing * 0.5, 0);
+  line(ctx, 0, -f.h * 0.42, -8 - swing, -16);
+  line(ctx, -8 - swing, -16, -10 - swing * 0.5, 0);
+}
+
+function poseJump(ctx, f) {
+  drawHead(ctx, f, 0, -f.h + 10);
+  line(ctx, 0, -f.h + 22, 0, -f.h * 0.42);
+  line(ctx, 0, -f.h + 28, 18, -f.h + 14);
+  line(ctx, 0, -f.h + 28, -14, -f.h + 14);
+  line(ctx, 0, -f.h * 0.42, 16, -28);
+  line(ctx, 16, -28, 18, -14);
+  line(ctx, 0, -f.h * 0.42, -14, -28);
+  line(ctx, -14, -28, -16, -14);
+}
+
+function poseCrouch(ctx, f) {
+  const ch = f.h * 0.55;
+  drawHead(ctx, f, 0, -ch + 10);
+  line(ctx, 0, -ch + 22, 0, -ch * 0.5);
+  line(ctx, 0, -ch + 26, 16, -ch + 38);
+  line(ctx, 0, -ch + 26, -12, -ch + 38);
+  line(ctx, 0, -ch * 0.5, 20, -12);
+  line(ctx, 20, -12, 22, 0);
+  line(ctx, 0, -ch * 0.5, -16, -12);
+  line(ctx, -16, -12, -18, 0);
+}
+
+function poseHitstun(ctx, f) {
+  drawHead(ctx, f, -6, -f.h + 12);
+  line(ctx, -4, -f.h + 22, -4, -f.h * 0.42);
+  line(ctx, -4, -f.h + 28, -16, -f.h + 20);
+  line(ctx, -4, -f.h + 28, -18, -f.h + 42);
+  line(ctx, -4, -f.h * 0.42, -8, -20);
+  line(ctx, -8, -20, -6, 0);
+  line(ctx, -4, -f.h * 0.42, -18, -14);
+  line(ctx, -18, -14, -20, 0);
+}
+
+function poseKO(ctx, f) {
+  line(ctx, -20, -8, 20, -4, 5);
+  drawHead(ctx, f, 22, -10);
+  line(ctx, -5, -6, -24, -12);
+  line(ctx, -24, -12, -28, 0);
+  line(ctx, 5, -4, 25, -8);
+}
+
+// Attack pose — dispatches to a per-move pose if available, else generic
+function poseAttack(ctx, f) {
+// [bundled: const moveName = getMoveFromState(f.state);]
+// [bundled: const sf = f.stateFrame;]
+// [bundled: const move = f.characterDef.moves[moveName];]
+
+  if (!move) { poseIdle(ctx, f); return; }
+
+  // Determine animation phase: 0=startup, 1=active, 2=recovery
+  const inActive = sf >= move.startup && sf < move.startup + move.active;
+  const ext = inActive ? 1 : Math.min(sf / Math.max(move.startup, 1), 1);
+
+  // For now: distinguish punch vs kick vs anti-air vs special by moveName
+  if (moveName.includes('kick') || moveName === 'j_hk') {
+    poseKick(ctx, f, moveName, ext, inActive);
+  } else if (moveName === '2hp' || moveName === 'spine_spike') {
+    poseAntiAir(ctx, f, ext, inActive);
+  } else if (moveName === 'backbend_shot') {
+    poseBackbendShot(ctx, f, ext, inActive);
+  } else {
+    posePunch(ctx, f, ext, inActive);
+  }
+}
+
+function posePunch(ctx, f, ext, inActive) {
+  drawHead(ctx, f, ext * 2, -f.h + 10);
+  line(ctx, 0, -f.h + 22, 0, -f.h * 0.42);
+  const punchX = 14 + ext * 22;
+  const punchY = -f.h + 28 + ext * 8;
+  line(ctx, 0, -f.h + 28, punchX, punchY, 4);
+  line(ctx, 0, -f.h + 28, -8, -f.h + 38);
+  line(ctx, 0, -f.h * 0.42, 12, -16);
+  line(ctx, 12, -16, 14, 0);
+  line(ctx, 0, -f.h * 0.42, -10, -16);
+  line(ctx, -10, -16, -12, 0);
+}
+
+function poseKick(ctx, f, moveName, ext, inActive) {
+  drawHead(ctx, f, 0, -f.h + 10);
+  line(ctx, 0, -f.h + 22, 0, -f.h * 0.42);
+  line(ctx, 0, -f.h + 28, -10, -f.h + 38);   // guard arm
+  line(ctx, 0, -f.h + 28, 8, -f.h + 40);
+  // Kick leg
+  const ky = moveName.includes('heavy') ? -f.h * 0.1 : -f.h * 0.35;
+  const kx = 10 + ext * 28;
+  line(ctx, 0, -f.h * 0.42, kx * 0.5, ky + 10);
+  line(ctx, kx * 0.5, ky + 10, kx, ky, 4);
+  // Standing leg
+  line(ctx, 0, -f.h * 0.42, -8, -16);
+  line(ctx, -8, -16, -10, 0);
+}
+
+function poseAntiAir(ctx, f, ext, inActive) {
+  // Chest-stand / anti-air: body leans back, striking upward
+  const lean = ext * 10;
+  drawHead(ctx, f, -lean, -f.h + 8 + lean * 0.3);
+  line(ctx, -lean * 0.5, -f.h + 22, -lean, -f.h * 0.45 + lean);
+  line(ctx, -lean, -f.h * 0.45 + lean, 12, -f.h * 0.7 - ext * 12, 4);  // striking arm up
+  line(ctx, -lean, -f.h * 0.45 + lean, -14, -f.h + 44);
+  line(ctx, 0, -f.h * 0.42, 10, -16);
+  line(ctx, 10, -16, 12, 0);
+  line(ctx, 0, -f.h * 0.42, -8, -16);
+  line(ctx, -8, -16, -10, 0);
+}
+
+function poseBackbendShot(ctx, f, ext, inActive) {
+  // Backbend: torso arches backwards
+  const bend = ext * 18;
+  drawHead(ctx, f, -bend * 0.6, -f.h + 14 + bend * 0.4);
+  line(ctx, 0, -f.h + 22, -bend * 0.3, -f.h * 0.42 + bend * 0.5);
+  line(ctx, -bend * 0.3, -f.h * 0.42 + bend * 0.5, 20, -f.h + 30);  // arm fires fwd
+  line(ctx, -bend * 0.3, -f.h * 0.42 + bend * 0.5, -16, -f.h + 50);
+  line(ctx, 0, -f.h * 0.42, 10, -16);
+  line(ctx, 10, -16, 12, 0);
+  line(ctx, 0, -f.h * 0.42, -8, -16);
+  line(ctx, -8, -16, -10, 0);
+}
+
+function drawHead(ctx, f, ox, oy) {
+  ctx.fillStyle = lighten(f.color, 0.25);
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(ox, oy, 9, 11, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(ox + 2, oy - 3, 2, 3);
+  ctx.fillRect(ox + 6, oy - 3, 2, 3);
+}
+
+function line(ctx, x1, y1, x2, y2, w = 3) {
+  ctx.lineWidth = w;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+}
+
+// ─── Debug overlay ────────────────────────────────────────────────────────────
+
+function drawBoxes(ctx, fighter, alpha) {
+  const ix = lerp(fighter.prevX, fighter.x, alpha);
+  const iy = lerp(fighter.prevY, fighter.y, alpha);
+  const snap = { ...fighter, x: ix, y: iy };
+
+  for (const hurt of fighter.hurtboxes) {
+    const r = toWorldBox(hurt, snap);
+    ctx.fillStyle = HURTBOX_FILL;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = HURTBOX_STROKE;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+  }
+  for (const hb of fighter.hitboxes) {
+// [bundled: const r = toWorldBox(hb, snap);]
+    ctx.fillStyle = HITBOX_FILL;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = HITBOX_STROKE;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+  }
+}
+
+function drawDebugText(ctx, fighter, alpha) {
+// [bundled: const ix = lerp(fighter.prevX, fighter.x, alpha);]
+// [bundled: const iy = lerp(fighter.prevY, fighter.y, alpha);]
+
+// [bundled: const s = fighter.state;]
+// [bundled: const sf = fighter.stateFrame;]
+
+  ctx.save();
+  ctx.font = '6px monospace';
+  ctx.textAlign = 'center';
+
+  // State name
+  let label = s;
+  if (isAttackState(s)) {
+// [bundled: const moveName = getMoveFromState(s);]
+// [bundled: const move = fighter.characterDef.moves[moveName];]
+    if (move) {
+// [bundled: const total = move.startup + move.active + move.recovery;]
+      let phase = 'startup';
+      if (sf >= move.startup && sf < move.startup + move.active)  phase = 'ACTIVE';
+      else if (sf >= move.startup + move.active)                   phase = 'recovery';
+      label = `${moveName} [${sf}/${total}] ${phase}`;
+    }
+  }
+
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.fillRect(ix - 60, iy - fighter.h - 16, 120, 10);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(label, ix, iy - fighter.h - 8);
+
+  // Cancel window indicator — green flash when cancel is available
+  if (fighter.canChainCancel || fighter.canSpecialCancel) {
+    const cx = fighter.canSpecialCancel ? '#00ff88' : '#88ff00';
+    ctx.fillStyle = cx;
+    ctx.fillRect(ix - 60, iy - fighter.h - 5, 120, 3);
+  }
+
+  // Frame advantage display (shown for 60 frames after a hit)
+  if (fighter.lastHitAdvantage !== null) {
+    const adv = fighter.lastHitAdvantage;
+    ctx.font = '7px monospace';
+    ctx.fillStyle = adv >= 0 ? '#00ff44' : '#ff4444';
+    ctx.fillText((adv >= 0 ? '+' : '') + adv, ix, iy - fighter.h - 20);
+  }
+
+  ctx.restore();
+}
+
+// ─── Colour helpers ───────────────────────────────────────────────────────────
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function lighten(hex, amt) { return shiftColor(hex,  amt); }
+function darken (hex, amt) { return shiftColor(hex, -amt); }
+
+function shiftColor(hex, amt) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const clamp = v => Math.max(0, Math.min(255, v));
+// [bundled: const r = clamp(((n >> 16) & 0xff) + Math.round(amt * 255));]
+  const g = clamp(((n >>  8) & 0xff) + Math.round(amt * 255));
+// [bundled: const b = clamp(( n        & 0xff) + Math.round(amt * 255));]
+  return `rgb(${r},${g},${b})`;
+}
+
+// ═══ render/ui.js ═══════════════════════════════════
+// HUD: health bars, round timer, announcements
+
+// [bundled: const W = 640, H = 360;]
+const BAR_Y = 14;
+const BAR_H = 18;
+const BAR_W = 230;
+const BAR_X1 = 20;          // P1 bar left edge
+const BAR_X2 = W - BAR_X1 - BAR_W; // P2 bar left edge
+
+function drawUI(ctx, fighters, round) {
+  drawHealthBars(ctx, fighters);
+  drawTimer(ctx, round);
+  drawAnnouncement(ctx, round);
+}
+
+function drawHealthBars(ctx, [f1, f2]) {
+  // P1 bar (fills right from left)
+  drawBar(ctx, BAR_X1, BAR_Y, BAR_W, BAR_H, f1.hp / f1.maxHp, '#e82020', '#ff6040', true);
+  // P2 bar (fills left from right — mirrored)
+  drawBar(ctx, BAR_X2, BAR_Y, BAR_W, BAR_H, f2.hp / f2.maxHp, '#2060e8', '#40a0ff', false);
+
+  // Player labels
+  ctx.font = 'bold 9px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#fff';
+  ctx.fillText('P1', BAR_X1, BAR_Y - 3);
+  ctx.textAlign = 'right';
+  ctx.fillText('P2', BAR_X2 + BAR_W, BAR_Y - 3);
+
+  // Fighter names
+  ctx.font = '7px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillText(f1.name.toUpperCase(), BAR_X1, BAR_Y + BAR_H + 8);
+  ctx.textAlign = 'right';
+  ctx.fillText(f2.name.toUpperCase(), BAR_X2 + BAR_W, BAR_Y + BAR_H + 8);
+}
+
+function drawBar(ctx, x, y, w, h, pct, darkColor, lightColor, leftAlign) {
+  // Background
+  ctx.fillStyle = '#111';
+  ctx.fillRect(x, y, w, h);
+
+  const fillW = Math.round(w * Math.max(0, pct));
+  const fillX = leftAlign ? x : x + w - fillW;
+
+  // Low-health warning flash
+  const flash = pct < 0.25 && Math.floor(Date.now() / 200) % 2 === 0;
+  ctx.fillStyle = flash ? '#ffcc00' : darkColor;
+  ctx.fillRect(fillX, y, fillW, h);
+
+  // Highlight stripe
+  ctx.fillStyle = flash ? 'rgba(255,255,200,0.4)' : lightColor;
+  ctx.fillRect(fillX, y + 2, fillW, 5);
+
+  // Border
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, h);
+}
+
+function drawTimer(ctx, round) {
+  const secs = getTimeSeconds(round);
+  const urgent = secs <= 10;
+
+  // Timer background box
+  const bx = W / 2 - 20, by = 8, bw = 40, bh = 26;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(bx, by, bw, bh);
+  ctx.strokeStyle = urgent
+    ? (Math.floor(Date.now() / 150) % 2 === 0 ? '#ff4040' : '#ff9900')
+    : 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(bx, by, bw, bh);
+
+  ctx.textAlign = 'center';
+  ctx.font = `bold ${urgent ? '20' : '18'}px monospace`;
+  ctx.fillStyle = urgent ? '#ff4040' : '#ffffff';
+  ctx.fillText(round.phase === PHASE.FIGHT ? String(secs).padStart(2, '0') : '--', W / 2, by + 20);
+}
+
+function drawAnnouncement(ctx, round) {
+  ctx.textAlign = 'center';
+
+  switch (round.phase) {
+    case PHASE.INTRO: {
+      // "ROUND X"
+      const fade = Math.min(1, (180 - round.phaseTimer) / 20);
+// [bundled: const alpha = round.phaseTimer < 30 ? round.phaseTimer / 30 : fade;]
+      ctx.globalAlpha = alpha;
+      drawBigText(ctx, `ROUND ${round.roundNumber}`, W / 2, H / 2 - 20, 32, '#ffdd00');
+      if (round.phaseTimer < 120) {
+        drawBigText(ctx, 'FIGHT!', W / 2, H / 2 + 20, 28, '#ff4040');
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case PHASE.KO:
+    case PHASE.RESULT: {
+      drawBigText(ctx, 'K.O.', W / 2, H / 2 - 10, 48, '#ffdd00');
+      if (round.phase === PHASE.RESULT) {
+        const msg = round.winner === 'draw' ? 'DRAW!' : `PLAYER ${round.winner} WINS!`;
+        drawBigText(ctx, msg, W / 2, H / 2 + 38, 16, '#ffffff');
+      }
+      break;
+    }
+  }
+}
+
+function drawBigText(ctx, text, x, y, size, color) {
+  ctx.font = `bold ${size}px monospace`;
+  // Shadow / outline
+  ctx.fillStyle = '#000';
+  for (const [ox, oy] of [[-2,2],[2,2],[-2,-2],[2,-2]]) {
+    ctx.fillText(text, x + ox, y + oy);
+  }
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+}
+
+// ═══ render/renderer.js ═══════════════════════════════════
+// Master render pass: stage → fighters → UI → post-FX
+// Uses an offscreen canvas so post-FX can sample the full frame.
+
+// [bundled: const W = 640, H = 360;]
+
+class Renderer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+
+    // Offscreen buffer — everything draws here, then CRT pass composites on top
+    this.offscreen = new OffscreenCanvas(W, H);
+    this.offCtx    = this.offscreen.getContext('2d');
+
+    this.showBoxes = false; // toggled by H key
+  }
+
+  render(fighters, round, alpha) {
+    const ctx = this.offCtx;
+
+    // Clear
+    ctx.clearRect(0, 0, W, H);
+
+    // Stage
+    drawStage(ctx);
+
+    // Fighters
+    for (const f of fighters) {
+      drawFighter(ctx, f, alpha, this.showBoxes);
+    }
+
+    // HUD
+    drawUI(ctx, fighters, round);
+
+    // Blit offscreen → display canvas
+    this.ctx.clearRect(0, 0, W, H);
+    this.ctx.drawImage(this.offscreen, 0, 0);
+
+    // CRT post-FX drawn on top of display canvas
+    applyCRT(this.ctx, this.offscreen, 1);
+  }
+}
+
+// ═══ main.js ═══════════════════════════════════
+
+// [bundled: const W = 640, H = 360;]
+
+// ─── Canvas ───────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('game');
+canvas.width  = W;
+canvas.height = H;
+
+const renderer = new Renderer(canvas);
+
+// ─── Game state ───────────────────────────────────────────────────────────────
+let fighters, motionBufs, round, paused;
+
+function initGame() {
+  fighters = [
+    createFighterInstance(Backbender, { id: 1, name: 'RED',  color: '#cc2020', x: 160, facing:  1 }),
+    createFighterInstance(Backbender, { id: 2, name: 'BLUE', color: '#2050cc', x: 480, facing: -1 }),
+  ];
+  motionBufs = [createMotionBuffer(), createMotionBuffer()];
+  round  = createRound();
+  paused = false;
+}
+
+initGame();
+
+// Prevent re-hitting on the same attack swing
+const hitThisAttack = new Set();
+let lastState = [null, null];
+
+// ─── Update ───────────────────────────────────────────────────────────────────
+function update() {
+  const [f1, f2] = fighters;
+
+  // System keys
+  if (wasPressed('Escape'))   paused = !paused;
+  if (wasPressed('Backquote')) renderer.showBoxes = !renderer.showBoxes;
+
+  if (paused) { flushInput(); return; }
+
+  // Auto-restart after result screen
+  if (round.phase === PHASE.RESULT && round.phaseTimer <= 0) {
+    initGame();
+    flushInput();
+    return;
+  }
+
+  const active = isFightActive(round);
+
+  const in1 = active ? getInputState(1) : nullInput();
+  const in2 = active ? getInputState(2) : nullInput();
+
+  // Reset per-swing hit guard whenever a fighter changes state
+  // (covers attack→idle, attack→cancel, attack→hitstun, etc.)
+  for (let i = 0; i < 2; i++) {
+    const f = fighters[i];
+    if (f.state !== lastState[i]) {
+      hitThisAttack.delete(f.id);
+      lastState[i] = f.state;
+    }
+  }
+
+  // Update fighters
+  updateFighter(f1, in1, f2, motionBufs[0]);
+  updateFighter(f2, in2, f1, motionBufs[1]);
+
+  // Hit detection (only during FIGHT phase)
+  if (active) {
+    for (const [atk, def] of [[f1, f2], [f2, f1]]) {
+      if (hitThisAttack.has(atk.id)) continue;
+      const hit = checkHit(atk, def);
+      if (hit) {
+        applyHit(def, hit, atk);
+        hitThisAttack.add(atk.id);
+      }
+    }
+  }
+
+  updateRound(round, fighters);
+  flushInput();
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function render(alpha) {
+  renderer.render(fighters, round, alpha);
+
+  if (paused) {
+// [bundled: const ctx = renderer.ctx;]
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 28px monospace';
+    ctx.fillStyle = '#ffdd00';
+    ctx.fillText('PAUSED', W / 2, H / 2);
+    ctx.font = '12px monospace';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('ESC to resume', W / 2, H / 2 + 22);
+  }
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+const loop = new GameLoop({ update, render });
+loop.start();
+
+function nullInput() {
+  return {
+    left:false, right:false, up:false, down:false,
+    lp:false, mp:false, hp:false, lk:false, mk:false, hk:false,
+    lpPressed:false, mpPressed:false, hpPressed:false,
+    lkPressed:false, mkPressed:false, hkPressed:false,
+    upPressed:false,
+  };
+}
+
+// =====================================================================
+</script>
+</body>
+</html>
