@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contortion Fighter</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0010;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+      font-family: monospace;
+    }
+
+    #wrapper {
+      position: relative;
+      /* CRT outer glow */
+      box-shadow:
+        0 0 0 2px #1a0030,
+        0 0 30px 8px rgba(120, 0, 200, 0.4),
+        0 0 80px 20px rgba(80, 0, 150, 0.2);
+      border-radius: 4px;
+    }
+
+    #game {
+      display: block;
+      /* Scale 2x for chunky pixels */
+      width:  1280px;
+      height: 720px;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      border-radius: 4px;
+    }
+
+    #controls {
+      margin-top: 12px;
+      color: rgba(180, 120, 255, 0.6);
+      font-size: 11px;
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+    #controls span { color: rgba(255,200,80,0.7); }
+  </style>
+</head>
+<body>
+  <div id="wrapper">
+    <canvas id="game"></canvas>
+  </div>
+
+  <div id="controls">
+    P1: <span>WASD</span> move &nbsp;|&nbsp; <span>F</span> light punch
+    &nbsp;&nbsp;&nbsp;
+    P2: <span>ARROWS</span> move &nbsp;|&nbsp; <span>J</span> light punch
+    &nbsp;&nbsp;&nbsp;
+    <span>H</span> hitboxes &nbsp;|&nbsp; <span>ESC</span> pause
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
