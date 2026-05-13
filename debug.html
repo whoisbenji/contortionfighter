@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Debug</title></head>
+<body>
+<pre id="out" style="font-family:monospace;white-space:pre-wrap;color:#0f0;background:#000;padding:12px;font-size:12px;min-height:200px"></pre>
+<script>
+window.onerror = (msg,src,line,col,err) => {
+  document.getElementById('out').textContent += 'WINDOW ERROR: '+msg+'\n  at '+src+':'+line+':'+col+'\n'+(err&&err.stack||'')+'\n';
+};
+window.addEventListener('unhandledrejection', function(e) {
+  document.getElementById('out').textContent += 'UNHANDLED: '+(e.reason&&e.reason.stack||e.reason)+'\n';
+});
+</script>
+<script type="module">
+import { GameLoop } from './src/engine/loop.js';
+import { checkHit } from './src/engine/collision.js';
+import { getInputState, flushInput, wasPressed } from './src/input/keyboard.js';
+import { createMotionBuffer } from './src/input/motionBuffer.js';
+import { createFighterInstance, updateFighter, applyHit } from './src/characters/characterBase.js';
+import { Backbender } from './src/characters/backbender.js';
+import { createRound } from './src/game/round.js';
+import { Renderer } from './src/render/renderer.js';
+
+const out = document.getElementById('out');
+const log = function() { out.textContent += Array.from(arguments).join(' ') + '\n'; };
+
+log('All imports resolved OK');
+try {
+  const f1 = createFighterInstance(Backbender, { id:1, name:'RED',  color:'#cc2020', x:160, facing: 1 });
+  const f2 = createFighterInstance(Backbender, { id:2, name:'BLUE', color:'#2050cc', x:480, facing:-1 });
+  log('createFighterInstance OK — f1:', f1.name, 'hp:', f1.hp, 'state:', f1.state);
+
+  const mb1 = createMotionBuffer(), mb2 = createMotionBuffer();
+  const ni = {left:false,right:false,up:false,down:false,lp:false,mp:false,hp:false,lk:false,mk:false,hk:false,lpPressed:false,mpPressed:false,hpPressed:false,lkPressed:false,mkPressed:false,hkPressed:false,upPressed:false};
+
+  updateFighter(f1, ni, f2, mb1);
+  updateFighter(f2, ni, f1, mb2);
+  log('updateFighter OK — f1 state:', f1.state);
+
+  log('Testing canvas render...');
+  const canvas = document.createElement('canvas');
+  canvas.width = 640; canvas.height = 360;
+  document.body.appendChild(canvas);
+  const renderer = new Renderer(canvas);
+  const round = createRound();
+  renderer.render([f1, f2], round, 0);
+  log('Renderer OK');
+  log('ALL SYSTEMS GO');
+} catch(e) {
+  log('RUNTIME ERROR: ' + e.message);
+  log(e.stack || '(no stack)');
+}
+</script>
+</body>
+</html>
