@@ -1,0 +1,2106 @@
+{
+  "Bow": [
+    {
+      "name": "Bow",
+      "family": "Bow",
+      "level": "Beginner",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0001BBBOWB-P",
+      "type": "Parent pose",
+      "difficulty": 30,
+      "description": "Bow pose can be thought of as a reverse bridge. This position is more challenging than bridge however, even though it utilises the same areas of flexibility in the hip flexors, shoulders and back. With bow pose there is a large element of strength involved. Strength from the hip flexors to extend and drive the legs upwards, and strength needed from the shoulders to extend up the away from the body to create the teardrop shape.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/yKIVFCF4HpC-iUhJeYQMpw/8pE9RPLrPPZDvxGUaW8bK3PYhMjI7h0O6jFdgdj6eCFi754DZ_0QprtqUcI5eLm3Ly2lSdpsU38iVCQ8La4D0CzCGpwgnY8-HSl6HCgtkPJ2oQtEtnYC_Bbfn8swRUkWfC7jhSOFajMwxMx89Nkcm-7A2r55XYDF2HUM3hdOtkhb-spSvapig7ynNg2hyTFFN2ouK0s0f5JGNMpjmSxXRb2ADOM67LTgehjpOT0pyp8/lGTEc2k4JYWVrlIZLb8l_2SI-rPxENF03nknL3qkrUU",
+      "url": "https://www.notion.so/3613c48af2978024a9ffe3c17889ec4e"
+    },
+    {
+      "name": "Bow with single foot on shoulder",
+      "family": "Bow",
+      "level": "Intermedate",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0003BBBOWI-C",
+      "type": "Child pose",
+      "difficulty": 32,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/CauDDa-_TxZXV3QO_Wn1fA/2rL9mWuLCoKIWEVsKKsUDggbZTSyZs2sfRjRY0SsAvqWyK-OMtZcENoti5oXm8hYPIzgDP6IqyB2dmu4W_NInLmsnNbQjGAlzFvVYiwesGtA-1jZo_LdPtTofCM3Tf2bOV8MiBal75_s_69TTwuDA2XejdCvc0m7kQbOq6TYDUTB-axvflDQNzSsf6Py6sZGUNx2szoT_eNVz_hD3Zev2w/V9usNUqXkLGIX6fpPKNS5gEdL8m3dW3eJwPFPy91EIo",
+      "url": "https://www.notion.so/3613c48af297807fa024c18ec57d3877"
+    },
+    {
+      "name": "Bow with both feet on shoulders",
+      "family": "Bow",
+      "level": "Intermedate",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0002BBBOWI-C",
+      "type": "Child pose",
+      "difficulty": 34,
+      "description": "Holding ankles and arching back in backbend while bringing the feet to the tops of the shoulders",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af297809baf31caf466a68819"
+    },
+    {
+      "name": "Bow with straight legs",
+      "family": "Bow",
+      "level": "Advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0005BBBOWA-C",
+      "type": "Child pose",
+      "difficulty": 38,
+      "description": "Holding ankles and arching back in backbend while extending legs upwards until straight",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/dJMxe1By_AH71jc9yKEV5A/Pjf_3ce_qB-xaH1xbaD3NbnZzv4-jZdyCzzsEDLQDlfZE0OFaMzvkP6LZ0JK7TMuiye7m12eT_-8AELJZjqOH3BxNSXnXuy5nMgiXanT5pYaCoW0c4CbRMFp_qifEbAFJbdTvX6rSdMuAo-i22B7Y8ttCN4G1Qf3cRefjrVhrlxo5SSUTTc4o1-mHSozLa0-dQAnhBK_UVFyTizA189uXw/-smF_RXEAYlmoytbPUM5NhSbiPr-FtGCSFHfQtr9fAs",
+      "url": "https://www.notion.so/3613c48af2978078a96eefb3242397e6"
+    },
+    {
+      "name": "Bow with headsit and straight legs",
+      "family": "Bow",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0004BBBOWHA-C",
+      "type": "Child pose",
+      "difficulty": 63,
+      "description": "Holding ankles and arching back in backbend while extending legs upwards until straight and resting the back of the head against the glutes",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780d79ec4ef17125dee11"
+    }
+  ],
+  "Box split": [
+    {
+      "name": "Frog",
+      "family": "Box split",
+      "level": "Foundation",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "0001FBFRGF-C",
+      "type": "Child pose",
+      "difficulty": 9,
+      "description": "Frog is one of the great first stages of working towards box splits. The full expression of frog pose is quite challenging, requiring lots of flexibility in the adductors to get the complete inside of both thighs flush with the floor. This pose is ideal for progressions and allows the performer to easily see progress.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/7dJs5lrSWRbCh7uEAIeC1w/dfxBTaA1zQ48YAmaIUnGF7Zy_HSTjFYNICt84sxMR17kmGr2YSnFrRxTu3lFObqhi8HfH8SZUqvHkpzskS1Rbg7TqqmI3lrxPQuVNbMPkNbBj_QWuqfu5SE5HarNaC28uc910O989fHl7MhsleVgEnKivBYh_X6AcIqoEoNwP3CqzdjygfoXmuRzuDGj020u/N8F82Y38aTBdQ4Hf9umkq6G8XYiA8nNAgnOy8tGZ9pY",
+      "url": "https://www.notion.so/3613c48af297805ba1e9c673e4cdaeee"
+    },
+    {
+      "name": "Pancake",
+      "family": "Box split",
+      "level": "Foundation",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 19,
+      "description": "Pancake is an important foundation pose that enables other poses such as fold through.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Straddle split",
+      "family": "Box split",
+      "level": "Beginner",
+      "category": [
+        "Splits"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Box split",
+      "family": "Box split",
+      "level": "Intermedate",
+      "category": [
+        "Splits"
+      ],
+      "code": "0001SBXSI-P",
+      "type": "Parent pose",
+      "difficulty": 30,
+      "description": "Box split is one of the great \"big three\" contortion poses that beginners should without question look to master. It has great use both on the floor and in the air as a trick as well as helping to unlock more advanced hip-based poses.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/CgFSjsABQuqO-HowW9G5fA/si1BtMaK04_xh4lVrwmcLmYQm5RCwF-2hMgx4-_iGNdGsqA7QQwNjVNhVt_4yMnb8Gi8OOLs0RYEhUeKJYh4sLctW2b0ujR4IAMzdBBfxzDXUL9n2JUPS11YXYAIdPKLDCkB_kOYtInOERcGtbGcJS1UGj07_NY1P3mEHTwpKTZ3_CqxEhpPe9txMV8Suc_SNqwR5LA1DRtl-h4d0UTLXA/jpqJyC3O2HFLbJwcQZxRh-jsphlyiMTm4syxekYlskg",
+      "url": "https://www.notion.so/3613c48af29780849906e87b57e8dd3e"
+    },
+    {
+      "name": "Straddle split handstand",
+      "family": "Box split",
+      "level": "Intermedate",
+      "category": [
+        "Balance",
+        "Splits"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Box split oversplit",
+      "family": "Box split",
+      "level": "Advanced",
+      "category": [
+        "Splits"
+      ],
+      "code": "0002SBXSA-C",
+      "type": "Child pose",
+      "difficulty": 35,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/cQVcna6N5qZ1AcIL_SjHiQ/rcrZYWzV1gMcGOsVXO5PJPilP5ObwMBaDl9EkCXE51HEm1yw1R9b6faKn2T7I3wfFL0SiAJlST5gqCbHPSUAQckplir1AR9T_fyaU2sHEDgB_0BFS6-7Z2gDKwYOwTDXLBzXcldz-GefcWQdLbwp0Ieo1hYFSN4lRpuNPcbde_TQwqQ8t7rqlkJbX7tJFABzhOtvmK4m3kX1FS1Gpch6cA/Qng4Ov-m3xYu53bLm-lTlcx8yhwZUWraGNE-xCVt59Y",
+      "url": "https://www.notion.so/3613c48af297803ebf0ae8c669862cbd"
+    }
+  ],
+  "Bridge": [
+    {
+      "name": "Glute bridge",
+      "family": "Bridge",
+      "level": "Foundation",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0001BBGBGF-C",
+      "type": "Child pose",
+      "difficulty": 5,
+      "description": "Glute bridge could be seen as one of the very first forays into backbending that puts much more emphasis on using the glutes (as the name suggests) rather than loading anything into the back or shoulders as would be required for other poses. This foundation exercise is best paired with some of the other foundation or beginner backbending poses to help build up overall capability towards the bridge pose",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/zHtTkymDR83wOO-a-r8Nzg/xHDqRGk4I8qqk5VajPjpTNrqXx6OBt3tnP9EIcyu37veuJDSnMr6-f6ZT4Bh-xc_JxBym9HefPcFExQBj_hQKytBrAPS6DWUlDv6pnbz-h8DEJEoPU-8PNPuk7PcBp6DhAHedGOxnw0h6xe0YBvyHL3u_qsEMc2JXB2txKqYa0F8qV0ndzwDT24osNgvRXwL/FzapaFng-9prazAQFE8ujsPqQPHkXfkVIMYjFhAc6I4",
+      "url": "https://www.notion.so/3613c48af29780108cf4e44df5ab091c"
+    },
+    {
+      "name": "Raised bridge (Feet raised)",
+      "family": "Bridge",
+      "level": "Foundation",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 15,
+      "description": "Raised bridge provides a more accessible version of bridge pose.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Bridge with straight legs with feet away from hands",
+      "family": "Bridge",
+      "level": "Beginner",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 19,
+      "description": "This is a good variation of bridge to train alongside regular bridge. For most training bridge with straight legs is actually more beneficial as it allows contortion practitioners to access more of their upper back and shoulder flexibility. Moving the load to this area means that it is less likely to impact the lower back which can cause discomfort.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780e18ed4e1c59d0fef6d"
+    },
+    {
+      "name": "Bridge",
+      "family": "Bridge",
+      "level": "Beginner",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0001BBBRGB-P",
+      "type": "Parent pose",
+      "difficulty": 20,
+      "description": "There are many ways to enter the bridge pose. The most common method is to enter for laying on the floor with knees bent, feet placed close to the glutes. The hands on on the floor, fingers pointing towards your toes, underneath your shoulders. From here you then push up into bridge, locking out your arms and pushing into your shoulders so that your arms are perpendicular to the floor. The bridge pose is one of the foundation poses in contortionist training. It is a backbend that utilises large movements in the hip flexors and the shoulders, making it a very useful pose to help progress other areas of a contortionist\u2019s overall backbending ability. The bridge pose is also a very good beginning pose as it easily modified to make way for progressions. From the bridge you can progress to have feet and ankles get closer and from there grabbing the ankles. Another variation is a Gymnastic Bridge whereby you push largely into the shoulders and keep the legs locked out, and straight. In yoga the bridge gets called \u201cwheel\u201d or Chakrasana. More colloquially and in other disciplines this pose gets called \u201ccrab\u201d.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/FyUuhTYCwfCMMn_sLe1p6w/TIcwkases_uQnBiyL2r9Cg1s84s1PAnnh5aJ-It1aw67PHyF88L0Q2ngva6BX_ZTmjH3CAyOzUPZf24RnFztqARx0GP-2zcpz0VVCzydL5DfAs23bbk-ve7m0uZIpzeF5y19m1RPpz_4O5me29n8Aw/oBNGrwX65Y2ZUyDMjcxbfXI7k_aKKXfGnIUzlNh9X_8",
+      "url": "https://www.notion.so/3613c48af29780de9e14ee6f34e3f3f6"
+    },
+    {
+      "name": "Bridge with straight legs leaning into shoulders",
+      "family": "Bridge",
+      "level": "Beginner",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 21,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/Xwi_uIXwpS09cmTUhZRQUQ/bGYTyA4q_aupXrT-K4T71qS3i52Fg7Ak1MEmnQasuDBLpgPeQbLSl5iMAqb9th8L4cvaKMLhwAshU76BIZgel0caRRtaQSYEwR1OZCw5x22i_ypmtS56uPkGplZViFHRS-ips-ZkSDql8aAbgWCATrmEt5fNtLeggd_XjkVtvQcQGJBq-6LFdf4GpvWjOhkRkARR5JxecvpCkkftQ1m18A/6febeyqewAoiVXwe8ShnMB9w1eQ5QFxrdDK5zHRX3AY",
+      "url": "https://www.notion.so/3613c48af29780eea19aef935fa88b23"
+    },
+    {
+      "name": "Bridge stagged with bent leg",
+      "family": "Bridge",
+      "level": "Beginner",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0016BBBRGB-C",
+      "type": "Child pose",
+      "difficulty": 22,
+      "description": "This pose is a subtle variation of the straight legged bridge. Instead of both legs out straight, one is brought in to change the shape of the pose. This can be the beginning pose of a transition to a stagged contortion handstand.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/GUvbwSaCIN1PomWQE4BIFw/dZBQPCL65xDVsw3cyL8PKQ5AAyGR606hf1_KNI7q7gKB5lNjsnieozX4Tv8O-PVh_Y5fR22NDr3r9yDlO7oyOALdjKDSgIQJXklyr6LPwXx4BqmmUpCojasJln6aPMNgOOWGssiNE9LWoDracnQBWA/2pI-8LtWvcabkINDEu2s6iZqRuQkRl7ZhD69vpTfEo0",
+      "url": "https://www.notion.so/3613c48af297803bbc14e10b28bf7cc5"
+    },
+    {
+      "name": "Bridge on elbows",
+      "family": "Bridge",
+      "level": "Beginner",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0010BBBRGB-C",
+      "type": "Child pose",
+      "difficulty": 24,
+      "description": "A variation of the regular bridge is to do it with straight legs which puts more emphasis on using the upper back and shoulders. This works in a similar way to",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/j4RgJVgZkS5KezpUFfYNig/uRQDRCqWa8x4DuncmjtQ5kP4a9Zo-LCBOu_nhg27SEz8juhjsU-VAVcll5t_HfTpt7O1Ml_BjzNKvfb42QhE5u5iJGYG2m9zMsXz_l8unqmH7HtxNUXhhlNA_A_Q4pOxgeUYfQP-46aQtfh9VidvKaPf_1mqA5KGasxEU5qNvNVjRUIXLc63BIgtEOjrgX35um_f82y1ln01Dwl4blshKw/WhmAzF0kvp-mmwWO3OP5ynJkwr_eACl_sA_CjOJQHwI",
+      "url": "https://www.notion.so/3613c48af2978043b8acd55e1734d790"
+    },
+    {
+      "name": "Bridge stagged with bent raised leg",
+      "family": "Bridge",
+      "level": "Beginner",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0017BBBRGB-C",
+      "type": "Child pose",
+      "difficulty": 24,
+      "description": "This is fairly simple alternative variation to bridge pose. The contortionist raises one leg off the floor, bends the knee fully and points their toes. This can be incorporated into other transitions such as walkovers",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/OwdWb3qs5f2NzVLbPZqfLw/BcQlJwVAkjXKYJrjFmqjstJhUvDmtFNUGa9qyr_J56NoQx-bU2oDF9cTpHWxqYVlYGyWPkuFzmjUd99Oxpvj0peBaRfXDubPgrIJJ274TLePfq25wx3kYqabOK2fdxzxGXK31oXPMzEIvfe6AfHHhg/CQpOpbD7g2xvok_z9LkaPD7goFeVVmhnd0ze9KpX3LA",
+      "url": "https://www.notion.so/3613c48af297805c954fea1066f7b434"
+    },
+    {
+      "name": "Bridge with straight legs feet by hands",
+      "family": "Bridge",
+      "level": "Intermedate",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 24,
+      "description": "This is a slightly more advanced version of the regular bridge as it requires more spinal flexion in order to get the hands and feet to meet. This is a likely good precursor to the bridge ankle catch but also for much more advanced tricks like bridge with ankle catch and backfold.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/I9YERHN2KprWWINMzNOs6A/ud_wCLBhghiL8NbfDgoqHJN5FTOzzZRROH5zPhNZUnVHPVeECjuhZd7w3diegSJG5qhIimIYMBqyIGnKruYF_8-xulGrYS6dpPZyuewRRufJlNiWaUMPBm8LHQXlfr0u2JmMoiv-oHcJd_xfsGKe6Co2fsgO0QOmxdfEi73RGdLt4Kd1hvY9FbfOhiwborw0/4K8HbkSZuX-V38XK_FcXZg6cR2npt1SbYIhAjrmshqU",
+      "url": "https://www.notion.so/3613c48af29780d48839dfc039cb39f6"
+    },
+    {
+      "name": "Bridge chair-sit",
+      "family": "Bridge",
+      "level": "Intermedate",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0005BBBRGI-C",
+      "type": "Child pose",
+      "difficulty": 25,
+      "description": "A variation of bridge pose which is completed by driving the hips and glutes downwards towards the floor while keeping pushed into the shoulders. This ensures that the upper back is engaged as much as possible. In the final version of this pose the contortionist would bring their glutes to rest on top of the head.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/ZdkMoQGfOi62gSRKJJtVtg/6-_4QN-ujUAzT_psAgkplNck6mGznOSOLMM0iDpUCvOE-RKM0SIPTjfBejvW_bznrwQ6lPDGoREmtLl2O9VLpz0kNuF5QeOdPGMCCH4_B8jDbW4d0CD8Eq4Cy00wQDso2rUfIA8hE-A_d-6qw1AY70gHZ4VIz9ctrbEAdM8_ienUCETKq3DzZQfjYHf8s0QJ/G43-3UbtnuG0cqOryG7ltXi-BW2elgBwLTwl2ceYIxs",
+      "url": "https://www.notion.so/3613c48af297806f8b36cfd158f9b8dd"
+    },
+    {
+      "name": "Bridge chair-sit with crossed legs",
+      "family": "Bridge",
+      "level": "Intermedate",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0006BBBRGB-C",
+      "type": "Child pose",
+      "difficulty": 27,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/Kr5HfHwROGvjjZKo3h7TeQ/Q2zfPqckOF1xOz3pnGb8FaOGbRS1zNb4Z9a8aEOleO33PlRi1BnIKM5seuPP8EMRtLU0aeVLu6jxTUUyyclVu_xoXXUPE7KjDy9xxc5wxYynG7kNkThpDdcILrboNLkKgZdVQ_wXYrS9bzcZHOtaklj26mo59_gVFc1gXNUB3wrJFaXtlr6lFMkA_7JHamG1KyE--udEtNxHPeGCTJZXAA/BPbduHmkZSZRPYxZ3c72SL7CncYn0w9AIoKt_GZQNSc",
+      "url": "https://www.notion.so/3613c48af297805f9438f34980883063"
+    },
+    {
+      "name": "Bridge on elbows holding ankles",
+      "family": "Bridge",
+      "level": "Intermedate",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0013BBBRGI-C",
+      "type": "Child pose",
+      "difficulty": 30,
+      "description": "This variation of bridge is a good way to prepare for the more advanced ankle catch bridge, but also allows to work different areas of flexibility such as in the shoulders while the arms are bent. This is also a potential starting entry point to move into a chest stand face frame if you are at that level.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/euR-YFydh4w_YM5Yky3-hw/M6B55dk8ZFvBRLJzX1cuwEm5_HwvDBRImFgdcbmpJFVi85VDwLf17uYsLvLFxW09iR9Txu4o469hDGijWxe87obXuZOeey1oG3AGVoL7sSUzWAapBkard4gSXr8LXt1u_cpZDf58XdFGQMZeACJUdTVv2hDodN8M4BKp9oN7KRjYnETijF9VvrZqKBRJIjBFEc-1pdNt8nQcScpsVwIrJw/WO00jrk69bBqI_1GmKajf1OQ-cbrOThxnyNczJyAdU4",
+      "url": "https://www.notion.so/3613c48af29780df83a7c2aba4b499ca"
+    },
+    {
+      "name": "Bridge on elbows face cradle",
+      "family": "Bridge",
+      "level": "Intermedate",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0011BBBRGI-C",
+      "type": "Child pose",
+      "difficulty": 37,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/Icgk-zcuzk2pQCIkBl1MdA/4HDZF01GEyQjsRPf_0AkJ1Rs6t6mGL8YY-HgDEKlsVpxPxmfbaCprQB5RwgIoTU1ELI4mLdpmHMVNh1Up6Kbwok1FzeZWV3jIgco6PAfPMxLrVc6rIamb4-5EORUFumxb0Se2bDUWZRmeMXzZxowbkzhy-c8QNWclALJZU72PyqXfwwBoCW4Ah-9MXimTuGncW25wNmCiBJb3RwSmRFdIIYmIJIdt1Hs5WNb4VDZN8g/yLO11AGCjaT4cI0Tb0J5v6lvFQRGqcrHGUCbXmSIAsM",
+      "url": "https://www.notion.so/3613c48af2978055a1dedfd9aef85f9a"
+    },
+    {
+      "name": "Bridge stagged in split",
+      "family": "Bridge",
+      "level": "Intermedate",
+      "category": [
+        "Backbend",
+        "Splits"
+      ],
+      "code": "0015BBBRGI-C",
+      "type": "Child pose",
+      "difficulty": 38,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780eea3e1cce68e20b7ab"
+    },
+    {
+      "name": "Bridge on elbows with chair-sit",
+      "family": "Bridge",
+      "level": "Intermedate",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0014BBBRGI-C",
+      "type": "Child pose",
+      "difficulty": 41,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/VI1I6beiU_m621TzjJthPw/tZ5Sb_NqQJ8-SgUgZ9QVgJof8YIDB33zEi_7VfKaGUxw_CkFW70Ea0YKNWl5hCBzdooBciSojSGKnksWb_Ae06vEA6nlsfirAFY0IauZHD4r8F17moN5i9GnsXKSwF5ZnFDE2TL00T6A3pGo0upgsdH-2A6jeF3t_ulKFerM2lYyqnxt2sgRlqyMmQsWFWEtsShd9wYi6TbvaOe7wbJ3Kg/gFOUhVfaM4c81XMTTsE0XkIuSmI_qftvlGSoi82PauA",
+      "url": "https://www.notion.so/3613c48af297800ebd4ec0b03340e06a"
+    },
+    {
+      "name": "Bridge ankle catch",
+      "family": "Bridge",
+      "level": "Advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0002BBBRGA-C",
+      "type": "Child pose",
+      "difficulty": 37,
+      "description": "This is the final progression of bridge pose whereby the contortionist takes their hands off the floor and grasps their ankles, knees or upper leg and brings their head towards their glutes. Completion of this advanced pose requires advanced shoulder as well as hip flexor flexibility. It can be entered in various different ways. Some prefer to start from the floor and walk their hands in towards their legs. Other contortionists prefer to hang back into the pose and then grab each leg or ankle individually without touching the floor.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/oSvrZ6jMK0nU2MqI9yyifg/6ZNyiMMZ2vS62DboRDwAPsJZBnyww9lGx4FmKmGQI-EOh3rRhx-VDJ8RBppS_araZvzvQq3OwiHYYmjw7mCZYJLviLup0fpanEkg0cWAwNO8Z6ezawxiePlTFN7GOlkn28FRjYSQW47LX1xGE5ejRRPAGcCZF8PzMTkINoB6hbuNRgv-N7NJXAjpZkySoR6P_FnsmpRFDnliojXZPCRmwg/aCnjBtOpw2u975OBLgIK3tzDdUAGxyI6Prlp9LAIVNU",
+      "url": "https://www.notion.so/3613c48af29780e09349e0d0bf8603f9"
+    },
+    {
+      "name": "Bridge holding knees",
+      "family": "Bridge",
+      "level": "Advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0008BBBRGA-C",
+      "type": "Child pose",
+      "difficulty": 42,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/PobQdJe5q8g0FBiDQRI97g/0Ko4JhaDhZCVTw8nOFfcdLWvQfR2zMmgaQskVBgdS6eFm76h_P8El8Bg-six-t7wnfkhl4ZSvbCQE4jYD4iaXXOQ0ikPYy6cHbE9B49UP2VOyjU8RA7yZFEm8cewHPAYN36TICovzJkSJOcsFTRU-HLXl75HV_vckTFA-W27kDiSG9uqlbyjfDHHWcgQDked-P0aCQkB5F8T66sN3_4otQ/Z0C_MdatE4yXGtGWC8mWARzStEoDoI27CgujFe4K5GY",
+      "url": "https://www.notion.so/3613c48af297809aaddce3628fb954c9"
+    },
+    {
+      "name": "Bridge on elbows face cradle headsit",
+      "family": "Bridge",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0012BBBRGHA-C",
+      "type": "Child pose",
+      "difficulty": 59,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/pZQkMwI3EXYp5J6jzy9M5Q/RKe_BWa0ggCRTT2c7jY-glWPsKUYekc5s9m5Yr-XCVp7dfFDdJ9bYIP1ZldqheE-b-aufBms6VyyaHlX9GdViWOe5-IECdb3X_9-F7nOrduJuPFubNnm_NmLi6UDqVCd90o98-cQZUkc1d2P2cfujoHcL0IV84pAnkcTfXl3KDbmHO9LvC139G_rdW_N-hs6YXd6D8c77hetWzbkq01oZg/SL_G4DTuXhSK2GBcp65beBE5_NsITOoEOPjb5NTfLB0",
+      "url": "https://www.notion.so/3613c48af2978022af00ef54a97baef8"
+    },
+    {
+      "name": "Bridge ankle catch headsit",
+      "family": "Bridge",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0003BBBRGHA-C",
+      "type": "Child pose",
+      "difficulty": 61,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/ldsdAsIYMnBrQ3OkOe80nA/5Fj44QtxkmJdiC1nHO_YIqvHX10JVZKKpfo2Yulq3_Bcx7C-kdjFX29jsj47xU0vTKwee5tiN_AwKMh3KyayQOtjn1psTHMX9foEcO4r5EHrKI2QQWztCBXgJWrW68NKe44kfZeUXn7WAOYe9_SAw-vvCnYkuP2svIYKehygJiUEv6Pr9Jp_vJ-umWmEoRAG_blT2u-jn1H0pEw11wlb5w/ybIsSZn1S506LH8a2JsCwG_7jtP6_t97fE1-kFHTNiY",
+      "url": "https://www.notion.so/3613c48af2978020a149d9203ec911fd"
+    },
+    {
+      "name": "Bridge chair-sit headsit",
+      "family": "Bridge",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0007BBBRGHA-C",
+      "type": "Child pose",
+      "difficulty": 62,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/-yuT8-_zvs6ZilAoqlncXQ/11wJhPCmTq1SnXtzLtwJ3JNuVVE9AwNSoUJ1KebesDYf8EOTCOssQO5GPaiKNQTngfMmOPokcESGbVi02y_RNRxHgt7XvS0YQ0fq8iUq1SxA-zeIYjibwBkj5Jhd8nqXoncnGoByDfMWlNT7JIvILRRCqf_fkQaLP5Y4rscc57vFtQkaWx37YD6VaXM8oYUNwLKac7v5MVOtmtDzouaqIg/9v2eTe2O7GwQzRgCjqJPbbLufy062EeZ904T6Z8HiWc",
+      "url": "https://www.notion.so/3613c48af297805cbc6cdd7134be3d79"
+    },
+    {
+      "name": "Bridge holding knees headsit",
+      "family": "Bridge",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0009BBBRGHA-C",
+      "type": "Child pose",
+      "difficulty": 64,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/mJ5DnTnLezbq_D6qKC-nGQ/6I1xzhJFi8MNkjY-8emtCC_GQrpVNHQazrD0u-4ue_d9byjuXJjkXdBy80k2l4heiaQkXoScsxMI441yPKnIgY8jDUCs0BBVRpnoeWCaX723sLRVO1HP1Kehto-QZ0NRTKq0qtExbuaLxAu4hb1AaDob4G9yBCQ96y_4IykXgdOjh_mzc1JFYrP5yKF3reV-7W0FviTnESOcvz47qFc8mw/3OM6vk3hKLxbHiWCfiTaBNhfwueCGhIK6c0Qp41Ax_M",
+      "url": "https://www.notion.so/3613c48af29780858867f6127f85e5e5"
+    },
+    {
+      "name": "Bridge ankle catch with backfold",
+      "family": "Bridge",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0004BBBRGHA-C",
+      "type": "Child pose",
+      "difficulty": 66,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/BoOKrQuoWZebFNG9LxjHig/vh5mCV1KlUDyK84yUGdV_yw30ZYwLUWgjlJdHTHj3Rr0eP43VFuPGAOqx6mCfK_6IV_aT46dG20y3ymarPYPzdtz5dYxZonSDdK0wI1Iz82U4UAb3-NB5QBJXIVt4biZpsbvDy_TcMy9ah2szc6VewtypS_kMhBPkopfYIhuqOuMwfwkgyqMtraAi9j17man6_Cw7xvGw1oye0txxynOoA/xRZloVMmis1ZQopI9cvA_Brfx4qb0_0uITMrCdip16s",
+      "url": "https://www.notion.so/3613c48af2978052863cd3679e7daf6e"
+    },
+    {
+      "name": "Bridge with arms around thighs and bent legs",
+      "family": "Bridge",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 69,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/4MaCIwQQKMRYDET-tHs80w/Th5kPW6h91v1Mm5Zvy1Msjr4eKn68tJomV0T8KIxh9mmQ3b5RPhrvZdCBVYoiozKwib-mWwRcC8Ix8T-jTCrVDo1Hxr2POwDJfvMKdLbgwaya4q6Yb95EEUi-q2yilTbR4XguvEf9-7FOjzjcXE9UkOHm5Bi17fnu8CysgWmev_3Jrhxl0XEFiJk7b0k5bIE5QiQGHe10S3vKlpPy81a2w/Os8LrQkw4bTlEVnKnVtHO7OJtic_SaBuZsrarpXcQMQ",
+      "url": "https://www.notion.so/3613c48af2978061a17bdf00e2e3b7f5"
+    },
+    {
+      "name": "Bridge with backfold hands in front of feet",
+      "family": "Bridge",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 73,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/1iWaWIidJBWPLP3vHnQKtQ/Igw6Wt1VqWlGxi53HIGqTiGAIvHOl9iohDbT_K9K7kS80TlPfB_pnkFIeJ_IYjAALwpRjmuB8ZphFnA6nVnCxDkuISGKTmOO4s3OVPFtOztjSmadDZdQTdWnJ9a5TfMqUf-mrROGOI9GhCI8VNLVPn720iXlLp83EBELSfxgj9TlhpJOF0q0pBxspCfKmOxd9FJnzRSIfTxi4atMmMDo3g/YkhDpT3nbw6soLZCdcyrmmHu_uxrOi_dyuHsWc_FHes",
+      "url": "https://www.notion.so/3613c48af29780ae9362cb7616ac80fb"
+    },
+    {
+      "name": "Bridge with straight legs headsit",
+      "family": "Bridge",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 78,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af2978037a883d43028b07465"
+    },
+    {
+      "name": "Bridge with arms around thighs and straight legs",
+      "family": "Bridge",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 83,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/TRzux8P8GT0JgUil-S0Yaw/PO7ut5s0SW_YbrW8idFE_YYytFoyU0A0Qmoui6wrjPB7pqM2h5kX_uXOgzFPm50XfiubaU8GoB8cV4rUItbtL9pdOuJRzYxXxj8ZTJbokA-8oh-p-4Z2AX7nYciCmBx5kquiPFrzZZOggg3ncfk6HjyC8YX_tPsUjC1ltjdqUME/1fRqsP4sCKLPzMLy2GVjiM5jQ_A4NqMij20waH_6NxI",
+      "url": "https://www.notion.so/3613c48af29780c09e7bcaac1d576e3a"
+    }
+  ],
+  "Butterfly": [
+    {
+      "name": "Butterfly",
+      "family": "Butterfly",
+      "level": "Foundation",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "0001FBBUTF-P",
+      "type": "Parent pose",
+      "difficulty": 7,
+      "description": "Butterfly pose is a foundation pose that stretches the groin and less so, the hamstrings, depending on how far your feet are away from you. To enter the pose, sit with back straight legs outstretched. You then bend your knees and bring your feet together and towards your body in one movement, sometimes it helps to guide your feet while cupping them with your hands. The deal progression for this pose to to have your knee flush with the floor and the feet only a few centimetres away from your groin.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/WEXF6SahiTbRa70nzgzCYg/u_kAyXDH1SEIFG6q2ol7h5YD6hJUG8TEOpaxg3sQBj6zKaP3lGJLNgzQhsgiEPyvRS-9w9Bw7MXWPbqRvk63xe4jCdrDjLr81SSdpCifJIDliY0y_V-RpsfQb1N2pXSGvfnzB6Aauc6yjKUbaJ778w/z16YDjNXsUQzAWdIjo7QqDd4nhmhWw-NIL3SAC7iC9Q",
+      "url": "https://www.notion.so/3613c48af297804bbf47f1d7bda895f5"
+    },
+    {
+      "name": "Single foot in armpit pose",
+      "family": "Butterfly",
+      "level": "Beginner",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Double foot in armpit pose",
+      "family": "Butterfly",
+      "level": "Intermedate",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/LgWcBMhZAehBB3SrwlcvXA/p4QuSTY1-RVNVq_lu9U9s41VS3AVmZjRgFN5Y862-iaB3MjjBmSczyVj94WrlaeHT-_Ni51ycAInmJ0zFNS1Xt3pCjWeBQGDn6sHNWY9ZOA1c9fLAou1nN4Qi73OIc8HikrT4nkePq3Ms3qPXhmvMt9ufKP4TSvMRkG_JV9N2NvxXIpOGK3nK0LWJVBkRX3x/224tOc49jE32BFyMYZVIoxzECoYKbikq9M5fvyhnFwI",
+      "url": "https://www.notion.so/3613c48af29780c7ac16fead8135fd24"
+    }
+  ],
+  "Chest stand": [
+    {
+      "name": "Chest stand",
+      "family": "Chest stand",
+      "level": "Intermedate",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0001BBCHDI-P",
+      "type": "Parent pose",
+      "difficulty": 45,
+      "description": "Chest stand is probably one of the most sought after poses in contortion and is considered a milestone when it is reached. The position itself looks like an impressive and impossible feature of flexibility. It combines flexibility in many different areas such as the back, hips shoulders and neck. Chest stand can be modified in many ways and opens up the possibilities for several different advanced versions once the basic chest stand in mastered.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/STV5pYHmVQHeHb5rWzLbZQ/_QUuhc6BkgmL2sjHHoD6xN2NwBnTEFPYW9YPXrKgug1qkfePIusA4zv8piVBaN1_hbm0EH1MutE109ygUrSswtdL_pzcxFKhwYWo-KsjOM_Th2wx1s9fmEoJEYNbYKNvK6imHO3t6JytWMjShbRi_t-AfORCxisl_s-OPCoTULLv9GzJNs8Z0fj5TdBkuUxo/TZt6_4HFlY4482IkPwM7eLZUkVkZEctS6BzmoaGdCrA",
+      "url": "https://www.notion.so/3613c48af29780a79adcf7ffce4472e8"
+    },
+    {
+      "name": "Chest stand with bent legs and arms crossed over feet chin on floor",
+      "family": "Chest stand",
+      "level": "Advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 49,
+      "description": "Most often referred to as chest stand face frame, this pose is usually the next variation that performers will look at working towards once they have a comfortable grasp on their basic chest stand. In this pose the performer wraps their arms around their ankles while hugging their feet towards their shoulders. This also sets up for the more advanced variation where the performer will lift their chin off the floor and look at their audience, and in very advanced cases transition into the backfold pose while the head lifted between the knees.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/JyHJemmVB6L80ODS_1voYQ/o0RSbDELGys_gmjGJ5EnQeUTxHsm2YMNayCDsqS3LbdNixsXVFvWg5bM7WAr8BWDaWSAJbcKHPY9dE5GxQUrQsOSNqxJMN5PAPqKI8tEq0S3fA-c9_fc7xXTRzNd79CSxab48r7OMt-ic9UKV-ny-mj-yFad7qhn2CbdnXIzsaHbBB2rFSmyDtpBmY3Z0EsE/xuCqkCaa0O6Wy6zypZXq3s-SZa9Ffws31GppVKQq7q4",
+      "url": "https://www.notion.so/3613c48af2978063b525c16bb8362871"
+    },
+    {
+      "name": "Chest stand headsit with straight legs and arms forward",
+      "family": "Chest stand",
+      "level": "Advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af297804f97e4dc5ca2bbac47"
+    },
+    {
+      "name": "Chest stand with bent legs and arms crossed over feet head lifted",
+      "family": "Chest stand",
+      "level": "Advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af297806c92a5e00e8d7a031e"
+    },
+    {
+      "name": "Chest stand with bent legs arms forward",
+      "family": "Chest stand",
+      "level": "Advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af297803fb92dc58fe7d79598"
+    },
+    {
+      "name": "Chest stand with bent legs with feet on floor",
+      "family": "Chest stand",
+      "level": "Advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af2978050a03dfa8cefcd80c9"
+    },
+    {
+      "name": "Chest stand with straight legs arms forward",
+      "family": "Chest stand",
+      "level": "Advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780baa327df89febc58bf"
+    },
+    {
+      "name": "Chest stand with straight legs feet on floor",
+      "family": "Chest stand",
+      "level": "Advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780d68cfcc588fabf0017"
+    },
+    {
+      "name": "Chest stand headsit with straight legs  and feet on floor",
+      "family": "Chest stand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 55,
+      "description": "One of the most common variations of chest stand headsit is where the performer has their legs locked out straight with their feet on the floor. From this position it allows different combinations of arm positions, such as lifting the arms from the floor. This pose is usually one of the first precursory steps to working towards the Marinelli trick.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/P16IC_Ende8nfsMbZUclKw/te2G2wQqhYqAEme1S377zqDqgrOM0H5wVtZZ_4H5Dj9tNLYs5gnnVFlyxdhgepnVp4HfKkrSQ8yWuFddCpA-DUgellIcc58FNdqnxY2ItuhtxjjSAv5vF6Mzztn5RWAwIt519bt06yJLwLk7BERG14IubXdwXH7Q-rnAjwZA1CEd2UBTfRkibX_ojIuJrP3Eke-qWUaEVOBFO-6LJSjsUg/kFHREOKqOlyj1-6qegjKPttZ6Rqatf3bID1wY0cz0tE",
+      "url": "https://www.notion.so/3613c48af29780159522c4c1e3270c7e"
+    },
+    {
+      "name": "Chest stand backfold with arms over thighs with legs crossed in front",
+      "family": "Chest stand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/28BLAxQypK6RAqLlfU8PoA/rkqTPgq2XOKBxcaecTiD3c42wY-hvN8GnNGs0ZX4gPzsOaZ4o4aiKqlu_xMACB8WjrKl1-l_P4vV8EWX9hHUUHEDDL7LfqwHMeH_hYgdUzFDuZHBCMCJG8GPz9IDP94PEoKxt3CfPz6E5apek2C9j-WkswbQkOn_O6zF9RzSS2gOqA7DQLYYF7rvVZ2EYuj4jrZWxXpmaHytY1jeE08SKYVpL7mofo3Ffzp2Azv39AY/lL6Ik9KhkXC1G6wqDOW1goznllmpP-G_LCZp6qYbMDA",
+      "url": "https://www.notion.so/3613c48af297804f90badea7e440bad7"
+    },
+    {
+      "name": "Chest stand backfold with bent legs and arms crossed over feet head lifted",
+      "family": "Chest stand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/X0B80iftrfBsxj6Owyk1PQ/XEpVKAI6nMoBTdO4xJPOMhY274Ejw7IpTimTkamwpM0xuWOer7PwlBDwWZsV7fMU32k9PXroyQCXLN3Aqruq2BZARr098Iy9R1SLhWVCcJDd6cpBLhm1BzaYH9IxdsxeMy__q254_cNr2vuVBYTU7b2NMryqyKPU_-a4H-wKaMy8v7yk7_ZGuLLTolPsfXWi6fcDT814k7gKaWsX4xQbRA/HioIfbZVK-Zgh3IioXOTe7hEtjailm_OQD9TQJXK8XA",
+      "url": "https://www.notion.so/3613c48af297802690a7e6ecd1c22090"
+    },
+    {
+      "name": "Chest stand backfold with legs straddled",
+      "family": "Chest stand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/vEn1NIs790HmvmJAl9Fcow/HNUaacQuvhJfrXbfDobcUD89YWvpeITnOVvCCdPWVEmQQCapKVRm4OSR7U32-9WcsxX7beohXlBCtxPzlCk2KosynWpH_gvKcgt3gOdX3Ez8v8fxMM_iRSkD4as9c_xAXaGVfIvROXRrGoRiT_9h2cCMfnGx4AJ4EpfD1ot5h9Tbi0WZmk4Pz5_RHtdkejWhk3PpkhbwKhjf5VMb__0Alg/-3-vA6d-H6UK_JVQnxHKoArefEikkDuyOBHl0jDlacE",
+      "url": "https://www.notion.so/3613c48af29780448cb7eeee321646fd"
+    },
+    {
+      "name": "Chest stand headsit on mouthpiece with single stag leg",
+      "family": "Chest stand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780b9a88cf34351dc3d60"
+    },
+    {
+      "name": "Chest stand headsit on mouthpiece with straight legs",
+      "family": "Chest stand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/Wpyk79_RxI7Rgh0Rb3RJiA/xhOmbYhkRTdtLdXmOAzGuvhIa9KQ7l0xHnymd1kXVJ8FCDvd3EajxDcLk2aUx7CPOU9OKiljMWQ3UvLmqVsyZ0QytsezwQEGuUyd4TxInoVTiOIChQsmJZ4qjz5pWZYuco8NkKWqgPw5Y_ZEMwdVXdFq8zIHdrhAW7vbg9KwW63sW27AHxx8g11V2ZU1XV6XMVYGA0WRD3syTiMIJn3aeQ/Mj9fZBg2OyvpdC39ZH81hFjHQIKCXq3ACioBp1FKhcs",
+      "url": "https://www.notion.so/3613c48af2978076823cd6ffc7862691"
+    },
+    {
+      "name": "Chest stand headsit with straight legs and arms forward",
+      "family": "Chest stand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/j08GiXlytJsn4qKtQAtMkw/kgJeXTzXJ3_YTaz6-I89w09A65RHWkp0W6sqbp7ihP8o6TRUFrPb6uhW9_fNJOxQ_-oxWPdEDPEp75l8YX-MW5VeAfpzQDi97tOzfnAddOvOxKdU2Ayvx8yIgKJUvJcTO47RVR-ZEaRP3BpeW-5dAl1lEvxORXAALBccvn6NqC8iouHfG4uNgqAYdzSxjmVpW6zbHHjorSO0NrSmHegG3g/r4OuTP8bQJO5adJZqfrmnuQXqMf7twImPl68tIf4hmc",
+      "url": "https://www.notion.so/3613c48af29780b98c83dd1df50c244c"
+    },
+    {
+      "name": "Chest stand headsit with straight legs and arms lifted",
+      "family": "Chest stand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af297808f8b79eb0a580ef0fb"
+    }
+  ],
+  "Cobra": [
+    {
+      "name": "Cobra",
+      "family": "Cobra",
+      "level": "Foundation",
+      "category": [
+        "Backbend"
+      ],
+      "code": "0001BBCOBF-P",
+      "type": "Parent pose",
+      "difficulty": 7,
+      "description": "Cobra pose is a foundation backbending pose. This pose stretches the abdominals and the lower and thoracic spine",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/957-FhT1pfYnSIWqF1mvqA/0fOlM8znwzC7cw7lznDnB-7_Cyv-nnjNzzMlwXeJ3Cz8e8Esjw1BBgB2QJN6xNWeN2jvitbIfWQru6MRQbdnyw5w111HgjJ1dnUG_RRv_aUUzaSaFMsO83boqfrRk4c2EVAFzxe4ae-bYRLiAvEnZg/q7lxxF6HTdaqIOpiyTC13qcV3IDyVVqhK7UsyGUpE-s",
+      "url": "https://www.notion.so/3613c48af2978057b360e1a0043f7d81"
+    },
+    {
+      "name": "Cobra head to feet",
+      "family": "Cobra",
+      "level": "Beginner",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 30,
+      "description": "This is the next progression of cobra once you have mastered the foundation cobra pose. This version of cobra is completed by bending your knees and bringing your feet to rest on the crown of your head. This utilises your hip flexors as well as multiple areas of your back. It also requires some hamstring strength to bring your feet to your head while the back is arched.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/-nKILNQRQQdO6yo5-eDnJg/5C6aFojHaJ50jjfhHoS3Oo5AWFyQa05sGHpJRICJ3VWreBLyMh1VJrzDNLo_a_Fg23MgtlHShYd2Sr8pzXS2zX1uhKH5SYa3GmGBjkVBdi1L-kSQgKGU5LFioqUUpmf5hDrERYnlO_kNf8Xdk8corZ-gVCIZOL-DFo3OD7rEiLhqK8NXeuNQa9Ye5teY4zSqosFdABn6MwCSUxXgCNFEaw/wdqYFRbN8HHhSBLtaPhoWtGER6VujM30__En6U1Gxi0",
+      "url": "https://www.notion.so/3613c48af29780449443ed0b678d372e"
+    },
+    {
+      "name": "Cobra ankle catch on side",
+      "family": "Cobra",
+      "level": "Intermedate",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780de897ae88010f86528"
+    },
+    {
+      "name": "Cobra ankle catch",
+      "family": "Cobra",
+      "level": "Advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af297800a96c7fe91bd2d6150"
+    },
+    {
+      "name": "Cobra ankle catch legs straight",
+      "family": "Cobra",
+      "level": "Advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af2978086a0a4fd35bec8ada8"
+    }
+  ],
+  "Contortion elbowstand": [
+    {
+      "name": "Contortion elbowstand",
+      "family": "Contortion elbowstand",
+      "level": "Beginner",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Parent pose",
+      "difficulty": 25,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af2978066b61fed9359ba68ad"
+    },
+    {
+      "name": "Contortion elbowstand with straight legs",
+      "family": "Contortion elbowstand",
+      "level": "Beginner",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af2978068a2efe51dbd7ee7e6"
+    },
+    {
+      "name": "Contortion elbowstand in lotus",
+      "family": "Contortion elbowstand",
+      "level": "Advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af2978082b0d8f2b147f28d65"
+    },
+    {
+      "name": "Contortion elbowstand with bent crossed legs",
+      "family": "Contortion elbowstand",
+      "level": "Advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af2978034b7a7c4d64fa028d6"
+    },
+    {
+      "name": "Contortion elbowstand backfold with straight legs",
+      "family": "Contortion elbowstand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780df9a8ed944c8c5afc5"
+    },
+    {
+      "name": "Contortion elbowstand headsit holding feet",
+      "family": "Contortion elbowstand",
+      "level": "Highly advanced",
+      "category": [],
+      "code": "",
+      "type": "",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780d89779ffef668ac0ee"
+    },
+    {
+      "name": "Contortion elbowstand headsit with single leg straight",
+      "family": "Contortion elbowstand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780e09594e4679e536e71"
+    }
+  ],
+  "Contortion handstand": [
+    {
+      "name": "Contortion handstand",
+      "family": "Contortion handstand",
+      "level": "Intermedate",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Parent pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af297802194b1f81988bb1229"
+    },
+    {
+      "name": "Contortion handstand with single leg stag",
+      "family": "Contortion handstand",
+      "level": "Intermedate",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780d3b919f8cb9ae39229"
+    },
+    {
+      "name": "Contortion handstand with stagged legs",
+      "family": "Contortion handstand",
+      "level": "Intermedate",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780b28ab0e516e017072a"
+    },
+    {
+      "name": "Contortion handstand with straight legs",
+      "family": "Contortion handstand",
+      "level": "Intermedate",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780ba8545d567d4a1ffe7"
+    },
+    {
+      "name": "Contortion handstand headsit with straight legs",
+      "family": "Contortion handstand",
+      "level": "Advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780f0bbbcf8b25a2ef5fd"
+    },
+    {
+      "name": "Contortion handstand with bent legs and arms crossed",
+      "family": "Contortion handstand",
+      "level": "Advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780208537e8a101fc39e0"
+    },
+    {
+      "name": "Contortion handstand with feet tucked under armpits",
+      "family": "Contortion handstand",
+      "level": "Advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780dfa525f88e504e0227"
+    },
+    {
+      "name": "Contortion handstand with single leg bent on one arm",
+      "family": "Contortion handstand",
+      "level": "Advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780e18ad1d2d3a5039885"
+    },
+    {
+      "name": "Contortion handstand with straight legs (Vertical)",
+      "family": "Contortion handstand",
+      "level": "Advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af297800c9d57fc9f4c3ac3b8"
+    },
+    {
+      "name": "Contortion Mexican handstand kinked back with bent legs",
+      "family": "Contortion handstand",
+      "level": "Advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af297806ba210e74f2ef63375"
+    },
+    {
+      "name": "Contortion Mexican handstand kinked back with straight legs",
+      "family": "Contortion handstand",
+      "level": "Advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af2978022b3f0d79b1f06bb20"
+    },
+    {
+      "name": "Contortion Mexican on canes handstand kinked back with bent legs",
+      "family": "Contortion handstand",
+      "level": "Advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780b4942bf26405e1f4a6"
+    },
+    {
+      "name": "Contortion handstand backfold on canes with straight legs",
+      "family": "Contortion handstand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af297809ab592ea39ce25a32a"
+    },
+    {
+      "name": "Contortion handstand backfold with bent legs wide",
+      "family": "Contortion handstand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780cca40acfeb9e4f4ee4"
+    },
+    {
+      "name": "Contortion handstand backfold with straight legs",
+      "family": "Contortion handstand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af2978085bc6bff52fee7dd47"
+    },
+    {
+      "name": "Contortion handstand headsit bent legs",
+      "family": "Contortion handstand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780bf9e56fcab9d78630e"
+    },
+    {
+      "name": "Contortion handstand headsit with bent legs together",
+      "family": "Contortion handstand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780d5bdddc3ff961db1cf"
+    },
+    {
+      "name": "Contortion handstand with leg behind back and bent front leg",
+      "family": "Contortion handstand",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend",
+        "Balance",
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/gDQRAnOnkbgdYiJ7HTVJ9A/c0ZIoWsN2Bg5jvwxb2AfoId9vlgd4CRrj1iElZdL-QQgrdkd5j7xZPuAuphNtQKXPVpH6edqy4Hq4s0Mj3fO7GOJQPcMzavqIRQjy1wPonK45_gCCg0kuFLrpJZhb2x1lmYL7HsdiEHwjQlGagqfGbQF6ns4iF08-svY0bAdMTAWDXgcIcL7ZSw3OdOiBJpd/nE5wYyJWKJJYUAfEOtpaNq1PtBAUK72uQHfa4vKedfo",
+      "url": "https://www.notion.so/3613c48af29780f297f3d6d21c6943a6"
+    }
+  ],
+  "Pike": [
+    {
+      "name": "Pike while standing",
+      "family": "Pike",
+      "level": "Foundation",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 4,
+      "description": "Pike pose while standing helps with developing your hamstring flexibility.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Pike",
+      "family": "Pike",
+      "level": "Foundation",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Parent pose",
+      "difficulty": 5,
+      "description": "Pike pose is one of the fundamental foundation poses when you're starting off in your contortion training.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Pike standing twist",
+      "family": "Pike",
+      "level": "Beginner",
+      "category": [
+        "Frontbend",
+        "Twist"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Fold through",
+      "family": "Pike",
+      "level": "Intermedate",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 27,
+      "description": "Fold through is a classic frontbending pose that is a great progression for those working towards human knot after attaining tricks such as pike or pancake. Fold through utilises a performer's hamstring flexibility as well as quad strength. This trick also makes use of back flexibility. Good form of this pose is to have straight legs with the head moving away from the glutes, trying to use as little back arch as possible.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/AdsFoK_7bsuUhgM0UjCpbA/QU0cCCggVVNqgfJF_HwthKGEO9dO8_EpwJxIUZniNq5WXonWGIbMa_yZG7nSc1Rd14MLvRDBPpXS_EdUUMR1JJTAT3G1y6s7NNmqygluur-tkEa_B4nT0Eb5FhAE2h4fn4fsBcNU2KXBECh-uZ7dBSN2R-yF7doIW8ZUMBV-vIV5HOHQrFFWf6MIBPHx1IMW/PuU_JkSb4NT7j5Yd2wMpM0chu3PoDkTUAx7gw7U-5wg",
+      "url": "https://www.notion.so/3613c48af2978028aaeeed73729d0eff"
+    }
+  ],
+  "Front split": [
+    {
+      "name": "Lunge",
+      "family": "Front split",
+      "level": "Foundation",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 4,
+      "description": "The most simple pose of the lunge sequence. Training pre-requisite for front splits and backbends.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Front split",
+      "family": "Front split",
+      "level": "Beginner",
+      "category": [
+        "Splits"
+      ],
+      "code": "0001SPFSPB-P",
+      "type": "Parent pose",
+      "difficulty": 26,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nas27sIS0t92dxaPivmWrQ/esDa3XicLcKiAwbVm78FEaNs2HJJDJKgiYD_Ua3mRLhdzyqvHhmmXw0MgcObnyDRyX4gMrMKoUITL8ak1TA2eMieY1RJo2rI206w6peZLSvWgK_v3DoHAzEJcASyirI5croMMMLp9iqQxoDGBL6aZRbfdbX9s2P65b68GQA8qxMc-wDGolbhCc1Nte3aEtJd3_emLhl7CBTtNoyXJiw0eg/hxmYup1Lc7tLcReggrCejI32Hy2WKB7pxLQ3d8nxsYI",
+      "url": "https://www.notion.so/3613c48af29780e48279e1b93f6f64aa"
+    },
+    {
+      "name": "Front split backbend ankle catch on floor",
+      "family": "Front split",
+      "level": "Advanced",
+      "category": [
+        "Backbend",
+        "Splits"
+      ],
+      "code": "0002SPFSPA-C",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/kbnls6cT3lbdNi-cCCrsBQ/pIrJ_NARjkgZgQ1OZVLoBk3vP-fAg_GUF7nXAQJvrNRcswNKts70lZDWcDCWmCuixBRtz8m5SvBoMCsR_pKcrEo5Jijdh1YofDg9dtgWgSBkhd-TNYpsb6BST1nXTUjzAqHI_FsTkmtXWk6TQYfXKtsD5jRD0y7-lp8AYH4i1DgUV6wbR1EKutLEHM3xiK0rrbbXGF_5WrkH46770U3jIQ/5zWY66u2lUN-98IrHSMoRCBzM3FeYxUip54BEmruY30",
+      "url": "https://www.notion.so/3613c48af29780c482eecded97af8604"
+    },
+    {
+      "name": "Front split backbend ankle catch standing",
+      "family": "Front split",
+      "level": "Advanced",
+      "category": [
+        "Backbend",
+        "Splits"
+      ],
+      "code": "0003SPFSPA-C",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780e79758cc3eb3311df8"
+    },
+    {
+      "name": "Front split oversplit backbend holding ankle up to 200 degrees",
+      "family": "Front split",
+      "level": "Advanced",
+      "category": [
+        "Backbend",
+        "Splits"
+      ],
+      "code": "0004SPFSPA-C",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780f4a993e6655fdd8dca"
+    },
+    {
+      "name": "Front split oversplit up to 200 degrees",
+      "family": "Front split",
+      "level": "Advanced",
+      "category": [
+        "Splits"
+      ],
+      "code": "0006SPFSPHA-C",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780e79d8aea0f92f6ca48"
+    },
+    {
+      "name": "Front split oversplit over 200 degrees",
+      "family": "Front split",
+      "level": "Highly advanced",
+      "category": [
+        "Splits"
+      ],
+      "code": "0005SPFSPHA-C",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780d69506e51a658eff9f"
+    }
+  ],
+  "Human Knot": [
+    {
+      "name": "Human Knot",
+      "family": "Human Knot",
+      "level": "Intermedate",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Parent pose",
+      "difficulty": 35,
+      "description": "Human knot is one of the classic staples of a frontbending performance. This pose is completed by the performer placing both feet behind their neck, crossed at the ankles. The best form for this trick is through keeping the back as flat as possible with the hips doing as much of the work as they will allow. The most basic variety of this pose is performing it laying down, doing it this way means that a performer doesn't have to worry about finding their balance as they are placing their feet.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/XkSAdq_cdbgmwY8BAgenwA/ogTXFU1X9ngcfq_LKZe5erqhf3Y7thR1oJT3AyhVaZRoIvZGvds2BSXRXiWh80oIwnw-Gtgj9t0v__U9ALUDFv-GfkVd8Y1z7g2NRnoxjNOfurvZ4AJWUH3s-uSI6Wm0ofsBFIQ6XQpTi1kRRblhK8Ti0_s3YrIZfgwhIkTsRMix_tDOUApcdqws2tmQqLAc/_1XRRq3B9iPiFxO4S_Vtp_pyfWPFrG1fr1SoEmG98h0",
+      "url": "https://www.notion.so/3613c48af297800c85cce4fdc0a6e816"
+    },
+    {
+      "name": "Human Knot armbalance",
+      "family": "Human Knot",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 42,
+      "description": "When a performer is able to put their feet behind their head in an upright position this then allows for the transition onto their hands by lifting their body off the ground. Having a flat back in this pose makes lifting off the ground easier and makes it less likely that you will fall forwards.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/ZIYKZqiYxVO_TKYP_exTKQ/PZrS9qmPYrl_y-7xx1zk9rSFIQBxWJxGk_-OWYt_wvZ74wKgNBThJDEz_hb8J_Ug23GIzZSK_sW3u1RI1vB7l_3j4_-FS69VpFWPSTLvM4TJdQkiMn8ayA6kfWyksOjid2le25TJvYdOXlrNOS08FBpC-wVuz0sojbMXffDtDM_lnV_xRPXb6uyeRgzTMYlw/NhxBf2cAPDNXWyIthwg8D3y7RmKPV0PRT9giTYWBofI",
+      "url": "https://www.notion.so/3613c48af297807f8d2efaaa045ef9b7"
+    },
+    {
+      "name": "Human Knot and crossed arms behind back",
+      "family": "Human Knot",
+      "level": "Advanced",
+      "category": [
+        "Dislocation",
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/cZeseAUw00fRX1SL7wUpWg/It7MKAXmd9JkHLxDshCzeg9fbUdBzEaW6N4u9G-8oUe2tc4WQ09K3nUMZUZf-qxHCjr3OH0rXcd2sAcBh2j2TzsNWy-B-gfCGYswwvG2WpDPkoWXP3hM0eIAc0ktkJPvot02bw3Ok5pDdUmMUfbu62UWFJML-FqOt_SCSB6i4FsRbaGj3C0su_qz2RuDV-EA/q0ClJ2PHetGWoCI751EMMMGCD0-RUKmhk5T4CZ-CbUQ",
+      "url": "https://www.notion.so/3613c48af29780b598c3e38f05ee4f9f"
+    },
+    {
+      "name": "Human Knot handstand",
+      "family": "Human Knot",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780faa7ffcb813dfe9f2b"
+    },
+    {
+      "name": "Human Knot handstand on one arm",
+      "family": "Human Knot",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/UTQe95zC_rVLKsPwiut-mw/yGMY6zxdG-z9x7iojyJU-BLytqyf4IxzJZioZ5X8dhKPieWXcr_C8UWVI6bBfBkzLHgtzBz17AekV4AgEqi52ix1BwWSGWUWBIsy_DCUrukiGgslQd99bCW-CgeAZSt8HuyNgeb1QfgiCu0Vg9JSKjDp1aWIam_WYng1eq7L_6M8fOaVK9cll5cfnROR7gTS/xs26_RNYBc7j5SDYDLpQND-l29YN8usyfW546O5Kqi4",
+      "url": "https://www.notion.so/3613c48af297804fadcdfc3605e0806a"
+    },
+    {
+      "name": "Human knot with ankles under opposite arms on front with arms over legs while on back",
+      "family": "Human Knot",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/mF2_3-wUuymYKIUhItakAQ/JM2nDSXnvR8pRcToiOxNn4alFbKxhiyne5HR-dSbYVq-ZFFsQp1fX7lx48XKHt9wVD8wQ5Rs9qONY3-aJGabIfvSoWM8Kd5NL0sSzaP8ae9ZmrjRNcpkeCJGdMd6go3PIr-5aDQnNQiAasG82xARjOHxJpAjjZl2A5ZFfk25iGU1v_FuYcLZz9WsjZzZTLMy/6c891th9H0nYzefrcAMDzI12rJY-dVO0PDVtYgjPAv0",
+      "url": "https://www.notion.so/3613c48af29780c4baa4ef20aa04f472"
+    },
+    {
+      "name": "Human knot with single leg under arm",
+      "family": "Human Knot",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af29780a2b1cdd6edf4411669"
+    },
+    {
+      "name": "Human Knot with uneven legs",
+      "family": "Human Knot",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/nR-ylgML9TddU-1U7gBmdA/osMzXkQQzSz3Mmwuiz_wY8AMitc2rlGo7Ujr7MC989ppfJfntlAuLkK3ucrbjUr8Nl1e1YKmKl5j9MKlh_y90BuQMhmyKD4DU2ufQ9X6vMe4M9y21V9KcRCtUNUtDJHVkSAoQR8Xy9NZWe8lnCR9YQ/oJoO_NOwjGgzpLG9FfKov3LrYB9LvzeRp3SGN9dxbTM",
+      "url": "https://www.notion.so/3613c48af2978078835ef8c786d3f636"
+    },
+    {
+      "name": "Human knot with ankles under opposite arms",
+      "family": "Human Knot",
+      "level": "Highly advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 59,
+      "description": "More commonly called DeMario pose, this is the pinnacle pose of the leg behind head series of poses (that the vast majority of people that train for it can attain). This pose is extreme in the position that it puts the contortionist in, and even more extreme in the technique needed to get into the pose alone and with the right amount if finess\u00e9 that would be required on stage.",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/PQWOxbXoi_6wAbtqMTAUOQ/BZ3FHgM0k7azOx8JvUg1J56Cy1R7ovY_9gPqgkYO8Aw8f6Bc554bDSSp9eEqrGhMqUcGTc1LhcyphT7zUcXQyyuGmjtxzrZEX2eIfcFsTPdPFxpFtbRrrASLonvSpq232JYkztz6hKBYLWMKfEl1HoYW-dKz4DjYnZC5-q1VDAiOedpD6cv6ZNiPKyRktYH1/cx6vq_yUbD68Wc1tvO37MM5438yG5lWFhzLleIFEmAM",
+      "url": "https://www.notion.so/3613c48af297805d8cb4f922b440e6ce"
+    },
+    {
+      "name": "Human knot with ankles under opposite arms and arms crossed behind back on back",
+      "family": "Human Knot",
+      "level": "Highly advanced",
+      "category": [
+        "Dislocation",
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/uqDO0OvII82UKwhoiVPyzw/Nl9VV9ay297GTY_KAMpp02-bLJmUcALHgP8ZEdZmyaQGiVwMiae6ROHardkNWNhLmJAIX8uJ6rirLFnqOYi6eSJDmAyZcJchGcvycZ9eBEizJhl1j69ATEDptDI1N7OIxRY_pt-n7qwCdv8tvumLUyvyiNXTN90wbBymJYoI_iA/ZbknD_wCrO0DzKiTqXqnpBoTDOpTBNypqZQJuJQ3rlI",
+      "url": "https://www.notion.so/3613c48af2978077b30cf437051a1026"
+    },
+    {
+      "name": "Human knot with ankles under opposite arms and arms crossed behind back with chest on the floor",
+      "family": "Human Knot",
+      "level": "Highly advanced",
+      "category": [
+        "Dislocation",
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/EV7kxS-Im0Nhk-h2xh7-zA/oj9QM8Mhk56Flo2Wh5pRQtm7WbnyFjv2dh5_Eo88dlgt7vw9IiYdfwHJT_LPmT4huYZilmGfeKxFhXPhgikQFrOGt_WPIqLF0lhnDvFJwg8lHC3ujk1pYPZHOM34Z-WcEZ69OKMfKHBzdr_7c2vbngh2OHh0ctW29_r1zJhLiqNbJXSiRZEScxfFFeveomW_/I1TXy39pkJ-CfKpp6UVFzX06sd6WP3VSb-IHCZSeKg4",
+      "url": "https://www.notion.so/3613c48af297805cb0d4d20c2d6e8992"
+    },
+    {
+      "name": "Human knot with ankles under opposite arms on front with arms over legs while upright",
+      "family": "Human Knot",
+      "level": "Highly advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": "https://v5.airtableusercontent.com/v3/u/53/53/1778860800000/3fBem68w7DiIwCmDr_RCtg/WkTCDBjP3loJ90x_xL2EbypaceDO5oIRqR6gI6-IT0nw14CtSQj90_k5Qu4BKy3UMSS9voQQKEv0S8GtYmdEaKr5VucKQNSxiEDJUiqNF9POp59ScNf_K6NYwAXz2SdSbFlLwwJhjQF50aUiO9hiXMX-ShsxONq51t9MD8I8mmmyS_UWd8U_6R8B3VfcSuME/PwR2TvTcxa3qIrsuJxkCfcnh1AgQcj3pdoeJHS5PMbY",
+      "url": "https://www.notion.so/3613c48af29780429528f48d634a6598"
+    }
+  ],
+  "Kandasana": [
+    {
+      "name": "Kandasana",
+      "family": "Kandasana",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Parent pose",
+      "difficulty": 40,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Kandasana armbalance",
+      "family": "Kandasana",
+      "level": "Advanced",
+      "category": [
+        "Balance",
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 55,
+      "description": "One of the easier next progressions for kandasana is to elevate the body so that the knees come off the floor.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Kandasana Handstand",
+      "family": "Kandasana",
+      "level": "Advanced",
+      "category": [
+        "Balance",
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Kandasana Headstand",
+      "family": "Kandasana",
+      "level": "Advanced",
+      "category": [
+        "Balance",
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Kandasana with knees together",
+      "family": "Kandasana",
+      "level": "Highly advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    }
+  ],
+  "Kneeling backbend": [
+    {
+      "name": "Kneeling backbend",
+      "family": "Kneeling backbend",
+      "level": "Beginner",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Parent pose",
+      "difficulty": 14,
+      "description": "This is one of the first progressions towards very advanced poses such as triple fold.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Kneeling backbend hands on floor",
+      "family": "Kneeling backbend",
+      "level": "Beginner",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Kneeling backbend ankle catch",
+      "family": "Kneeling backbend",
+      "level": "Intermedate",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "Kneeling backbends are an interesting variation to backbending sequences.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Kneeling backbend with knee catch",
+      "family": "Kneeling backbend",
+      "level": "Advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 58,
+      "description": "Once a contortionist is more comfortable with grabbing their ankles, they will eventually reach their knees.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Kneeling backbend headsit with ankle catch",
+      "family": "Kneeling backbend",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Kneeling backbend headsit with hands on floor",
+      "family": "Kneeling backbend",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Kneeling backbend in triplefold",
+      "family": "Kneeling backbend",
+      "level": "Highly advanced",
+      "category": [
+        "Backbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    }
+  ],
+  "Leg behind back": [
+    {
+      "name": "Leg behind back",
+      "family": "Leg behind back",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Parent pose",
+      "difficulty": 38,
+      "description": "This pose is also known as leg under armpit pose and is the natural progression of a contortionist furthering their leg behind head practice.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind back while standing",
+      "family": "Leg behind back",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 40,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind back with foot under armpit",
+      "family": "Leg behind back",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 43,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind back twist",
+      "family": "Leg behind back",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 44,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind back elbow stand with piked leg",
+      "family": "Leg behind back",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 51,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind back half lotus",
+      "family": "Leg behind back",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 57,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind back half lotus twist",
+      "family": "Leg behind back",
+      "level": "Advanced",
+      "category": [
+        "Frontbend",
+        "Twist"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 59,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind back handstand",
+      "family": "Leg behind back",
+      "level": "Advanced",
+      "category": [
+        "Frontbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 60,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind back with foot under armpit and arms crossed behind back",
+      "family": "Leg behind back",
+      "level": "Advanced",
+      "category": [
+        "Dislocation",
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind back with foot under armpit standing",
+      "family": "Leg behind back",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind back with foot under armpit while twisted",
+      "family": "Leg behind back",
+      "level": "Advanced",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind back with foot under armpit while twisted armbalance",
+      "family": "Leg behind back",
+      "level": "Advanced",
+      "category": [
+        "Balance",
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    }
+  ],
+  "Leg behind head": [
+    {
+      "name": "Lunge with hands on floor",
+      "family": "Leg behind head",
+      "level": "Foundation",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 5,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Lunge with elbows on floor",
+      "family": "Leg behind head",
+      "level": "Foundation",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 6,
+      "description": "The next progression of lunge is to lower to the floor with a flat back.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Pidgeon",
+      "family": "Leg behind head",
+      "level": "Foundation",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 7,
+      "description": "Pigeon pose is another great foundation pose. This position is the precursor to much of the leg behind head sequence.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Squat",
+      "family": "Leg behind head",
+      "level": "Foundation",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 8,
+      "description": "Squat is a fundamental pose for many hip-related poses.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Lunge with chest on floor",
+      "family": "Leg behind head",
+      "level": "Beginner",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 8,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind head",
+      "family": "Leg behind head",
+      "level": "Beginner",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Parent pose",
+      "difficulty": 28,
+      "description": "Leg behind head is the act of placing one's foot or ankle behind the head, neck, shoulder.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind head arm balance",
+      "family": "Leg behind head",
+      "level": "Intermedate",
+      "category": [
+        "Balance",
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 34,
+      "description": "Once comfortable with leg behind head a contortionist is able to start playing with different positions and transitions.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind head standing",
+      "family": "Leg behind head",
+      "level": "Intermedate",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "This is a natural progression of the single leg behind head pose.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind head twisted",
+      "family": "Leg behind head",
+      "level": "Intermedate",
+      "category": [
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "This pose adds another dimension to the regular leg behind head.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind head while twisted armbalance",
+      "family": "Leg behind head",
+      "level": "Advanced",
+      "category": [
+        "Balance",
+        "Frontbend"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": 35,
+      "description": "A fun progression after leg behind head and the twisted variations have been mastered.",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind head elbowstand",
+      "family": "Leg behind head",
+      "level": "Advanced",
+      "category": [
+        "Frontbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    },
+    {
+      "name": "Leg behind head handstand",
+      "family": "Leg behind head",
+      "level": "Advanced",
+      "category": [
+        "Frontbend",
+        "Balance"
+      ],
+      "code": "",
+      "type": "Child pose",
+      "difficulty": null,
+      "description": "",
+      "photo": null,
+      "url": ""
+    }
+  ]
+}
