@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contortion Skill Tree</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0b0e1c;
+    color: #e0e0e0;
+    font-family: 'Courier New', Courier, monospace;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* Scanline overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.07) 2px,
+      rgba(0,0,0,0.07) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Vignette overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.55) 100%);
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  /* Fixed header */
+  #header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 60px;
+    background: rgba(11,14,28,0.97);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 0 20px;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+  }
+
+  #header h1 {
+    font-size: 14px;
+    letter-spacing: 3px;
+    color: #fff;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  #progress-info {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 1px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  #section-bars {
+    display: flex;
+    gap: 12px;
+    flex: 1;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  .section-bar-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 80px;
+  }
+
+  .section-bar-label {
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+  }
+
+  .section-bar-track {
+    height: 4px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .section-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  #reset-btn {
+    background: rgba(255,50,50,0.15);
+    border: 1px solid rgba(255,50,50,0.35);
+    color: rgba(255,100,100,0.9);
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    padding: 5px 14px;
+    cursor: pointer;
+    text-transform: uppercase;
+    border-radius: 3px;
+    flex-shrink: 0;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  #reset-btn:hover {
+    background: rgba(255,50,50,0.25);
+    border-color: rgba(255,100,100,0.6);
+  }
+
+  /* Scrollable SVG container */
+  #svg-container {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: auto;
+    background: #0b0e1c;
+  }
+
+  #skill-svg {
+    display: block;
+  }
+
+  /* Detail panel */
+  #detail-panel {
+    position: fixed;
+    right: -360px;
+    top: 60px;
+    width: 340px;
+    height: calc(100vh - 60px);
+    background: rgba(13,17,34,0.98);
+    border-left: 1px solid rgba(255,255,255,0.1);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    transition: right 0.3s cubic-bezier(0.4,0,0.2,1);
+    backdrop-filter: blur(12px);
+  }
+
+  #detail-panel.open {
+    right: 0;
+  }
+
+  #detail-panel-inner {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 20px;
+  }
+
+  #detail-panel-inner::-webkit-scrollbar {
+    width: 4px;
+  }
+  #detail-panel-inner::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  #detail-panel-inner::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px;
+  }
+
+  #detail-close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.4);
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 8px;
+    font-family: 'Courier New', Courier, monospace;
+    transition: color 0.2s;
+  }
+  #detail-close:hover { color: rgba(255,255,255,0.9); }
+
+  .detail-pose-name {
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: #fff;
+    margin-bottom: 12px;
+    padding-right: 30px;
+    line-height: 1.4;
+  }
+
+  .detail-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+
+  .badge {
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    border: 1px solid;
+  }
+
+  .badge-level-foundation { color: #aaa; border-color: #666; background: rgba(150,150,150,0.1); }
+  .badge-level-beginner { color: #5dde7e; border-color: #3daa5a; background: rgba(61,170,90,0.1); }
+  .badge-level-intermediate { color: #5db0de; border-color: #3d80aa; background: rgba(61,128,170,0.1); }
+  .badge-level-advanced { color: #de9a3d; border-color: #aa6e1e; background: rgba(170,110,30,0.1); }
+  .badge-level-highly-advanced { color: #de5d9a; border-color: #aa3d70; background: rgba(170,61,112,0.1); }
+
+  .badge-cat { color: rgba(255,255,255,0.5); border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); }
+  .badge-family { border-color: currentColor; background: rgba(255,255,255,0.04); opacity: 0.85; }
+
+  .detail-difficulty {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 1px;
+    margin-bottom: 14px;
+  }
+
+  .detail-difficulty span {
+    color: rgba(255,255,255,0.8);
+    font-size: 13px;
+  }
+
+  .detail-description {
+    font-size: 11px;
+    line-height: 1.7;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 20px;
+    letter-spacing: 0.3px;
+  }
+
+  .detail-code {
+    font-size: 10px;
+    color: rgba(255,255,255,0.2);
+    letter-spacing: 2px;
+    margin-bottom: 20px;
+  }
+
+  #detail-panel-footer {
+    padding: 16px 20px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+
+  #detail-action-btn {
+    width: 100%;
+    padding: 11px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid;
+  }
+
+  #detail-action-btn.unlock {
+    background: rgba(61,216,92,0.12);
+    border-color: rgba(61,216,92,0.4);
+    color: #3dd85c;
+  }
+  #detail-action-btn.unlock:hover {
+    background: rgba(61,216,92,0.22);
+    border-color: rgba(61,216,92,0.7);
+  }
+  #detail-action-btn.lock {
+    background: rgba(255,80,80,0.1);
+    border-color: rgba(255,80,80,0.3);
+    color: rgba(255,120,120,0.8);
+  }
+  #detail-action-btn.lock:hover {
+    background: rgba(255,80,80,0.18);
+    border-color: rgba(255,80,80,0.5);
+  }
+
+  /* Prereq warning */
+  #prereq-warning {
+    font-size: 10px;
+    color: rgba(255,180,80,0.8);
+    letter-spacing: 1px;
+    margin-top: 8px;
+    text-align: center;
+    min-height: 16px;
+  }
+
+  /* Animations */
+  @keyframes nodeUnlock {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.18); }
+    70% { transform: scale(0.95); }
+    100% { transform: scale(1); }
+  }
+
+  @keyframes nodeShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-5px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+  }
+
+  .anim-unlock {
+    animation: nodeUnlock 0.4s ease;
+  }
+
+  .anim-shake {
+    animation: nodeShake 0.4s ease;
+  }
+</style>
+</head>
+<body>
+
+<!-- Fixed header -->
+<div id="header">
+  <h1>Contortion Skill Tree</h1>
+  <div id="progress-info">0 / 144 poses unlocked</div>
+  <div id="section-bars"></div>
+  <button id="reset-btn">Reset</button>
+</div>
+
+<!-- Scrollable SVG area -->
+<div id="svg-container">
+  <svg id="skill-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+
+<!-- Detail panel -->
+<div id="detail-panel">
+  <button id="detail-close" title="Close">&#x2715;</button>
+  <div id="detail-panel-inner">
+    <div class="detail-pose-name" id="dp-name"></div>
+    <div class="detail-badges" id="dp-badges"></div>
+    <div class="detail-difficulty" id="dp-difficulty"></div>
+    <div class="detail-description" id="dp-description"></div>
+    <div class="detail-code" id="dp-code"></div>
+  </div>
+  <div id="detail-panel-footer">
+    <button id="detail-action-btn" class="unlock">Unlock</button>
+    <div id="prereq-warning"></div>
+  </div>
+</div>
+
+<script>
+const SKILL_DATA = {"sections":[{"name":"BACKBENDS","families":["Bridge","Kneeling backbend","Bow","Cobra","Chest stand"],"color":"#d84a3b"},{"name":"FRONTBENDS & SPLITS","families":["Pike","Butterfly","Box split","Front split"],"color":"#3bd85c"},{"name":"HIP FLEXIBILITY","families":["Leg behind head","Leg behind back","Human Knot"],"color":"#8a3bd8"},{"name":"ADVANCED BALANCE","families":["Kandasana","Contortion elbowstand","Contortion handstand"],"color":"#3bd8c4"}],"familyColors":{"Bridge":"#3b7dd8","Kneeling backbend":"#d84a3b","Bow":"#d8823b","Cobra":"#d83b8a","Chest stand":"#3bd8c4","Pike":"#3bd85c","Butterfly":"#d83bd8","Box split":"#d8c83b","Front split":"#8ad83b","Leg behind head":"#9b4ae8","Leg behind back":"#b84ae8","Human Knot":"#d8a83b","Kandasana":"#3bd8a8","Contortion elbowstand":"#4a5bd8","Contortion handstand":"#7a4ae8"},"familyCol":{"Bridge":0,"Kneeling backbend":1,"Bow":2,"Cobra":3,"Chest stand":4,"Pike":5,"Butterfly":6,"Box split":7,"Front split":8,"Leg behind head":9,"Leg behind back":10,"Human Knot":11,"Kandasana":12,"Contortion elbowstand":13,"Contortion handstand":14},"colOrder":["Bridge","Kneeling backbend","Bow","Cobra","Chest stand","Pike","Butterfly","Box split","Front split","Leg behind head","Leg behind back","Human Knot","Kandasana","Contortion elbowstand","Contortion handstand"],"families":{"Bridge":[{"name":"Glute bridge","family":"Bridge","level":"Foundation","category":["Backbend"],"code":"0001BBGBGF-C","type":"Child pose","difficulty":5,"description":"Glute bridge could be seen as one of the very first forays into backbending that puts much more emphasis on using the glutes (as the name suggests) rather than loading anything into the back or shoulders as would be required for other poses. This foundation exercise is best paired with some of the other foundation or beginner backbending poses to help build up overall capability towards the bridge pose","id":"glute_bridge","familyIndex":0,"prereq":null},{"name":"Raised bridge (Feet raised)","family":"Bridge","level":"Foundation","category":["Backbend"],"code":"","type":"Child pose","difficulty":15,"description":"Raised bridge provides a more accessible version of bridge pose.","id":"raised_bridge_feet_raised","familyIndex":1,"prereq":"glute_bridge"},{"name":"Bridge with straight legs with feet away from hands","family":"Bridge","level":"Beginner","category":["Backbend"],"code":"","type":"Child pose","difficulty":19,"description":"This is a good variation of bridge to train alongside regular bridge. For most training bridge with straight legs is actually more beneficial as it allows contortion practitioners to access more of their upper back and shoulder flexibility. Moving the load to this area means that it is less likely to impact the lower back which can cause discomfort.","id":"bridge_with_straight_legs_with_feet_away_from_hand","familyIndex":2,"prereq":"raised_bridge_feet_raised"},{"name":"Bridge","family":"Bridge","level":"Beginner","category":["Backbend"],"code":"0001BBBRGB-P","type":"Parent pose","difficulty":20,"description":"There are many ways to enter the bridge pose. The most common method is to enter for laying on the floor with knees bent, feet placed close to the glutes. The hands on on the floor, fingers pointing towards your toes, underneath your shoulders. From here you then push up into bridge, locking out your arms and pushing into your shoulders so that your arms are perpendicular to the floor. The bridge pose is one of the foundation poses in contortionist training. It is a backbend that utilises large movements in the hip flexors and the shoulders, making it a very useful pose to help progress other areas of a contortionist\u2019s overall backbending ability. The bridge pose is also a very good beginning pose as it easily modified to make way for progressions. From the bridge you can progress to have feet and ankles get closer and from there grabbing the ankles. Another variation is a Gymnastic Bridge whereby you push largely into the shoulders and keep the legs locked out, and straight. In yoga the bridge gets called \u201cwheel\u201d or Chakrasana. More colloquially and in other disciplines this pose gets called \u201ccrab\u201d.","id":"bridge","familyIndex":3,"prereq":"bridge_with_straight_legs_with_feet_away_from_hand"},{"name":"Bridge with straight legs leaning into shoulders","family":"Bridge","level":"Beginner","category":["Backbend"],"code":"","type":"Child pose","difficulty":21,"description":"","id":"bridge_with_straight_legs_leaning_into_shoulders","familyIndex":4,"prereq":"bridge"},{"name":"Bridge stagged with bent leg","family":"Bridge","level":"Beginner","category":["Backbend"],"code":"0016BBBRGB-C","type":"Child pose","difficulty":22,"description":"This pose is a subtle variation of the straight legged bridge. Instead of both legs out straight, one is brought in to change the shape of the pose. This can be the beginning pose of a transition to a stagged contortion handstand.","id":"bridge_stagged_with_bent_leg","familyIndex":5,"prereq":"bridge_with_straight_legs_leaning_into_shoulders"},{"name":"Bridge on elbows","family":"Bridge","level":"Beginner","category":["Backbend"],"code":"0010BBBRGB-C","type":"Child pose","difficulty":24,"description":"A variation of the regular bridge is to do it with straight legs which puts more emphasis on using the upper back and shoulders. This works in a similar way to","id":"bridge_on_elbows","familyIndex":6,"prereq":"bridge_stagged_with_bent_leg"},{"name":"Bridge stagged with bent raised leg","family":"Bridge","level":"Beginner","category":["Backbend"],"code":"0017BBBRGB-C","type":"Child pose","difficulty":24,"description":"This is fairly simple alternative variation to bridge pose. The contortionist raises one leg off the floor, bends the knee fully and points their toes. This can be incorporated into other transitions such as walkovers","id":"bridge_stagged_with_bent_raised_leg","familyIndex":7,"prereq":"bridge_on_elbows"},{"name":"Bridge with straight legs feet by hands","family":"Bridge","level":"Intermedate","category":["Backbend"],"code":"","type":"Child pose","difficulty":24,"description":"This is a slightly more advanced version of the regular bridge as it requires more spinal flexion in order to get the hands and feet to meet. This is a likely good precursor to the bridge ankle catch but also for much more advanced tricks like bridge with ankle catch and backfold.","id":"bridge_with_straight_legs_feet_by_hands","familyIndex":8,"prereq":"bridge_stagged_with_bent_raised_leg"},{"name":"Bridge chair-sit","family":"Bridge","level":"Intermedate","category":["Backbend"],"code":"0005BBBRGI-C","type":"Child pose","difficulty":25,"description":"A variation of bridge pose which is completed by driving the hips and glutes downwards towards the floor while keeping pushed into the shoulders. This ensures that the upper back is engaged as much as possible. In the final version of this pose the contortionist would bring their glutes to rest on top of the head.","id":"bridge_chair_sit","familyIndex":9,"prereq":"bridge_with_straight_legs_feet_by_hands"},{"name":"Bridge chair-sit with crossed legs","family":"Bridge","level":"Intermedate","category":["Backbend"],"code":"0006BBBRGB-C","type":"Child pose","difficulty":27,"description":"","id":"bridge_chair_sit_with_crossed_legs","familyIndex":10,"prereq":"bridge_chair_sit"},{"name":"Bridge on elbows holding ankles","family":"Bridge","level":"Intermedate","category":["Backbend"],"code":"0013BBBRGI-C","type":"Child pose","difficulty":30,"description":"This variation of bridge is a good way to prepare for the more advanced ankle catch bridge, but also allows to work different areas of flexibility such as in the shoulders while the arms are bent. This is also a potential starting entry point to move into a chest stand face frame if you are at that level.","id":"bridge_on_elbows_holding_ankles","familyIndex":11,"prereq":"bridge_chair_sit_with_crossed_legs"},{"name":"Bridge on elbows face cradle","family":"Bridge","level":"Intermedate","category":["Backbend"],"code":"0011BBBRGI-C","type":"Child pose","difficulty":37,"description":"","id":"bridge_on_elbows_face_cradle","familyIndex":12,"prereq":"bridge_on_elbows_holding_ankles"},{"name":"Bridge stagged in split","family":"Bridge","level":"Intermedate","category":["Backbend","Splits"],"code":"0015BBBRGI-C","type":"Child pose","difficulty":38,"description":"","id":"bridge_stagged_in_split","familyIndex":13,"prereq":"bridge_on_elbows_face_cradle"},{"name":"Bridge on elbows with chair-sit","family":"Bridge","level":"Intermedate","category":["Backbend"],"code":"0014BBBRGI-C","type":"Child pose","difficulty":41,"description":"","id":"bridge_on_elbows_with_chair_sit","familyIndex":14,"prereq":"bridge_stagged_in_split"},{"name":"Bridge ankle catch","family":"Bridge","level":"Advanced","category":["Backbend"],"code":"0002BBBRGA-C","type":"Child pose","difficulty":37,"description":"This is the final progression of bridge pose whereby the contortionist takes their hands off the floor and grasps their ankles, knees or upper leg and brings their head towards their glutes. Completion of this advanced pose requires advanced shoulder as well as hip flexor flexibility. It can be entered in various different ways. Some prefer to start from the floor and walk their hands in towards their legs. Other contortionists prefer to hang back into the pose and then grab each leg or ankle individually without touching the floor.","id":"bridge_ankle_catch","familyIndex":15,"prereq":"bridge_on_elbows_with_chair_sit"},{"name":"Bridge holding knees","family":"Bridge","level":"Advanced","category":["Backbend"],"code":"0008BBBRGA-C","type":"Child pose","difficulty":42,"description":"","id":"bridge_holding_knees","familyIndex":16,"prereq":"bridge_ankle_catch"},{"name":"Bridge on elbows face cradle headsit","family":"Bridge","level":"Highly advanced","category":["Backbend"],"code":"0012BBBRGHA-C","type":"Child pose","difficulty":59,"description":"","id":"bridge_on_elbows_face_cradle_headsit","familyIndex":17,"prereq":"bridge_holding_knees"},{"name":"Bridge ankle catch headsit","family":"Bridge","level":"Highly advanced","category":["Backbend"],"code":"0003BBBRGHA-C","type":"Child pose","difficulty":61,"description":"","id":"bridge_ankle_catch_headsit","familyIndex":18,"prereq":"bridge_on_elbows_face_cradle_headsit"},{"name":"Bridge chair-sit headsit","family":"Bridge","level":"Highly advanced","category":["Backbend"],"code":"0007BBBRGHA-C","type":"Child pose","difficulty":62,"description":"","id":"bridge_chair_sit_headsit","familyIndex":19,"prereq":"bridge_ankle_catch_headsit"},{"name":"Bridge holding knees headsit","family":"Bridge","level":"Highly advanced","category":["Backbend"],"code":"0009BBBRGHA-C","type":"Child pose","difficulty":64,"description":"","id":"bridge_holding_knees_headsit","familyIndex":20,"prereq":"bridge_chair_sit_headsit"},{"name":"Bridge ankle catch with backfold","family":"Bridge","level":"Highly advanced","category":["Backbend"],"code":"0004BBBRGHA-C","type":"Child pose","difficulty":66,"description":"","id":"bridge_ankle_catch_with_backfold","familyIndex":21,"prereq":"bridge_holding_knees_headsit"},{"name":"Bridge with arms around thighs and bent legs","family":"Bridge","level":"Highly advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":69,"description":"","id":"bridge_with_arms_around_thighs_and_bent_legs","familyIndex":22,"prereq":"bridge_ankle_catch_with_backfold"},{"name":"Bridge with backfold hands in front of feet","family":"Bridge","level":"Highly advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":73,"description":"","id":"bridge_with_backfold_hands_in_front_of_feet","familyIndex":23,"prereq":"bridge_with_arms_around_thighs_and_bent_legs"},{"name":"Bridge with straight legs headsit","family":"Bridge","level":"Highly advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":78,"description":"","id":"bridge_with_straight_legs_headsit","familyIndex":24,"prereq":"bridge_with_backfold_hands_in_front_of_feet"},{"name":"Bridge with arms around thighs and straight legs","family":"Bridge","level":"Highly advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":83,"description":"","id":"bridge_with_arms_around_thighs_and_straight_legs","familyIndex":25,"prereq":"bridge_with_straight_legs_headsit"}],"Kneeling backbend":[{"name":"Kneeling backbend","family":"Kneeling backbend","level":"Beginner","category":["Backbend"],"code":"","type":"Parent pose","difficulty":14,"description":"This is one of the first progressions towards very advanced poses such as triple fold.","id":"kneeling_backbend","familyIndex":0,"prereq":null},{"name":"Kneeling backbend hands on floor","family":"Kneeling backbend","level":"Beginner","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"kneeling_backbend_hands_on_floor","familyIndex":1,"prereq":"kneeling_backbend"},{"name":"Kneeling backbend ankle catch","family":"Kneeling backbend","level":"Intermedate","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"Kneeling backbends are an interesting variation to backbending sequences.","id":"kneeling_backbend_ankle_catch","familyIndex":2,"prereq":"kneeling_backbend_hands_on_floor"},{"name":"Kneeling backbend with knee catch","family":"Kneeling backbend","level":"Advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":58,"description":"Once a contortionist is more comfortable with grabbing their ankles, they will eventually reach their knees.","id":"kneeling_backbend_with_knee_catch","familyIndex":3,"prereq":"kneeling_backbend_ankle_catch"},{"name":"Kneeling backbend headsit with ankle catch","family":"Kneeling backbend","level":"Highly advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"kneeling_backbend_headsit_with_ankle_catch","familyIndex":4,"prereq":"kneeling_backbend_with_knee_catch"},{"name":"Kneeling backbend headsit with hands on floor","family":"Kneeling backbend","level":"Highly advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"kneeling_backbend_headsit_with_hands_on_floor","familyIndex":5,"prereq":"kneeling_backbend_headsit_with_ankle_catch"},{"name":"Kneeling backbend in triplefold","family":"Kneeling backbend","level":"Highly advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"kneeling_backbend_in_triplefold","familyIndex":6,"prereq":"kneeling_backbend_headsit_with_hands_on_floor"}],"Bow":[{"name":"Bow","family":"Bow","level":"Beginner","category":["Backbend"],"code":"0001BBBOWB-P","type":"Parent pose","difficulty":30,"description":"Bow pose can be thought of as a reverse bridge. This position is more challenging than bridge however, even though it utilises the same areas of flexibility in the hip flexors, shoulders and back. With bow pose there is a large element of strength involved. Strength from the hip flexors to extend and drive the legs upwards, and strength needed from the shoulders to extend up the away from the body to create the teardrop shape.","id":"bow","familyIndex":0,"prereq":null},{"name":"Bow with single foot on shoulder","family":"Bow","level":"Intermedate","category":["Backbend"],"code":"0003BBBOWI-C","type":"Child pose","difficulty":32,"description":"","id":"bow_with_single_foot_on_shoulder","familyIndex":1,"prereq":"bow"},{"name":"Bow with both feet on shoulders","family":"Bow","level":"Intermedate","category":["Backbend"],"code":"0002BBBOWI-C","type":"Child pose","difficulty":34,"description":"Holding ankles and arching back in backbend while bringing the feet to the tops of the shoulders","id":"bow_with_both_feet_on_shoulders","familyIndex":2,"prereq":"bow_with_single_foot_on_shoulder"},{"name":"Bow with straight legs","family":"Bow","level":"Advanced","category":["Backbend"],"code":"0005BBBOWA-C","type":"Child pose","difficulty":38,"description":"Holding ankles and arching back in backbend while extending legs upwards until straight","id":"bow_with_straight_legs","familyIndex":3,"prereq":"bow_with_both_feet_on_shoulders"},{"name":"Bow with headsit and straight legs","family":"Bow","level":"Highly advanced","category":["Backbend"],"code":"0004BBBOWHA-C","type":"Child pose","difficulty":63,"description":"Holding ankles and arching back in backbend while extending legs upwards until straight and resting the back of the head against the glutes","id":"bow_with_headsit_and_straight_legs","familyIndex":4,"prereq":"bow_with_straight_legs"}],"Cobra":[{"name":"Cobra","family":"Cobra","level":"Foundation","category":["Backbend"],"code":"0001BBCOBF-P","type":"Parent pose","difficulty":7,"description":"Cobra pose is a foundation backbending pose. This pose stretches the abdominals and the lower and thoracic spine","id":"cobra","familyIndex":0,"prereq":null},{"name":"Cobra head to feet","family":"Cobra","level":"Beginner","category":["Backbend"],"code":"","type":"Child pose","difficulty":30,"description":"This is the next progression of cobra once you have mastered the foundation cobra pose. This version of cobra is completed by bending your knees and bringing your feet to rest on the crown of your head. This utilises your hip flexors as well as multiple areas of your back. It also requires some hamstring strength to bring your feet to your head while the back is arched.","id":"cobra_head_to_feet","familyIndex":1,"prereq":"cobra"},{"name":"Cobra ankle catch on side","family":"Cobra","level":"Intermedate","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"cobra_ankle_catch_on_side","familyIndex":2,"prereq":"cobra_head_to_feet"},{"name":"Cobra ankle catch","family":"Cobra","level":"Advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"cobra_ankle_catch","familyIndex":3,"prereq":"cobra_ankle_catch_on_side"},{"name":"Cobra ankle catch legs straight","family":"Cobra","level":"Advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"cobra_ankle_catch_legs_straight","familyIndex":4,"prereq":"cobra_ankle_catch"}],"Chest stand":[{"name":"Chest stand","family":"Chest stand","level":"Intermedate","category":["Backbend"],"code":"0001BBCHDI-P","type":"Parent pose","difficulty":45,"description":"Chest stand is probably one of the most sought after poses in contortion and is considered a milestone when it is reached. The position itself looks like an impressive and impossible feature of flexibility. It combines flexibility in many different areas such as the back, hips shoulders and neck. Chest stand can be modified in many ways and opens up the possibilities for several different advanced versions once the basic chest stand in mastered.","id":"chest_stand","familyIndex":0,"prereq":null},{"name":"Chest stand with bent legs and arms crossed over feet chin on floor","family":"Chest stand","level":"Advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":49,"description":"Most often referred to as chest stand face frame, this pose is usually the next variation that performers will look at working towards once they have a comfortable grasp on their basic chest stand. In this pose the performer wraps their arms around their ankles while hugging their feet towards their shoulders. This also sets up for the more advanced variation where the performer will lift their chin off the floor and look at their audience, and in very advanced cases transition into the backfold pose while the head lifted between the knees.","id":"chest_stand_with_bent_legs_and_arms_crossed_over_f","familyIndex":1,"prereq":"chest_stand"},{"name":"Chest stand headsit with straight legs and arms forward","family":"Chest stand","level":"Advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"chest_stand_headsit_with_straight_legs_and_arms_fo","familyIndex":2,"prereq":"chest_stand_with_bent_legs_and_arms_crossed_over_f"},{"name":"Chest stand with bent legs and arms crossed over feet head lifted","family":"Chest stand","level":"Advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"chest_stand_with_bent_legs_and_arms_crossed_over_f","familyIndex":3,"prereq":"chest_stand_headsit_with_straight_legs_and_arms_fo"},{"name":"Chest stand with bent legs arms forward","family":"Chest stand","level":"Advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"chest_stand_with_bent_legs_arms_forward","familyIndex":4,"prereq":"chest_stand_with_bent_legs_and_arms_crossed_over_f"},{"name":"Chest stand with bent legs with feet on floor","family":"Chest stand","level":"Advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"chest_stand_with_bent_legs_with_feet_on_floor","familyIndex":5,"prereq":"chest_stand_with_bent_legs_arms_forward"},{"name":"Chest stand with straight legs arms forward","family":"Chest stand","level":"Advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"chest_stand_with_straight_legs_arms_forward","familyIndex":6,"prereq":"chest_stand_with_bent_legs_with_feet_on_floor"},{"name":"Chest stand with straight legs feet on floor","family":"Chest stand","level":"Advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"chest_stand_with_straight_legs_feet_on_floor","familyIndex":7,"prereq":"chest_stand_with_straight_legs_arms_forward"},{"name":"Chest stand headsit with straight legs  and feet on floor","family":"Chest stand","level":"Highly advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":55,"description":"One of the most common variations of chest stand headsit is where the performer has their legs locked out straight with their feet on the floor. From this position it allows different combinations of arm positions, such as lifting the arms from the floor. This pose is usually one of the first precursory steps to working towards the Marinelli trick.","id":"chest_stand_headsit_with_straight_legs__and_feet_o","familyIndex":8,"prereq":"chest_stand_with_straight_legs_feet_on_floor"},{"name":"Chest stand backfold with arms over thighs with legs crossed in front","family":"Chest stand","level":"Highly advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"chest_stand_backfold_with_arms_over_thighs_with_le","familyIndex":9,"prereq":"chest_stand_headsit_with_straight_legs__and_feet_o"},{"name":"Chest stand backfold with bent legs and arms crossed over feet head lifted","family":"Chest stand","level":"Highly advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"chest_stand_backfold_with_bent_legs_and_arms_cross","familyIndex":10,"prereq":"chest_stand_backfold_with_arms_over_thighs_with_le"},{"name":"Chest stand backfold with legs straddled","family":"Chest stand","level":"Highly advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"chest_stand_backfold_with_legs_straddled","familyIndex":11,"prereq":"chest_stand_backfold_with_bent_legs_and_arms_cross"},{"name":"Chest stand headsit on mouthpiece with single stag leg","family":"Chest stand","level":"Highly advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"chest_stand_headsit_on_mouthpiece_with_single_stag","familyIndex":12,"prereq":"chest_stand_backfold_with_legs_straddled"},{"name":"Chest stand headsit on mouthpiece with straight legs","family":"Chest stand","level":"Highly advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"chest_stand_headsit_on_mouthpiece_with_straight_le","familyIndex":13,"prereq":"chest_stand_headsit_on_mouthpiece_with_single_stag"},{"name":"Chest stand headsit with straight legs and arms lifted","family":"Chest stand","level":"Highly advanced","category":["Backbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"chest_stand_headsit_with_straight_legs_and_arms_li","familyIndex":14,"prereq":"chest_stand_headsit_on_mouthpiece_with_straight_le"}],"Pike":[{"name":"Pike while standing","family":"Pike","level":"Foundation","category":["Frontbend"],"code":"","type":"Child pose","difficulty":4,"description":"Pike pose while standing helps with developing your hamstring flexibility.","id":"pike_while_standing","familyIndex":0,"prereq":null},{"name":"Pike","family":"Pike","level":"Foundation","category":["Frontbend"],"code":"","type":"Parent pose","difficulty":5,"description":"Pike pose is one of the fundamental foundation poses when you're starting off in your contortion training.","id":"pike","familyIndex":1,"prereq":"pike_while_standing"},{"name":"Pike standing twist","family":"Pike","level":"Beginner","category":["Frontbend","Twist"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"pike_standing_twist","familyIndex":2,"prereq":"pike"},{"name":"Fold through","family":"Pike","level":"Intermedate","category":["Frontbend"],"code":"","type":"Child pose","difficulty":27,"description":"Fold through is a classic frontbending pose that is a great progression for those working towards human knot after attaining tricks such as pike or pancake. Fold through utilises a performer's hamstring flexibility as well as quad strength. This trick also makes use of back flexibility. Good form of this pose is to have straight legs with the head moving away from the glutes, trying to use as little back arch as possible.","id":"fold_through","familyIndex":3,"prereq":"pike_standing_twist"}],"Butterfly":[{"name":"Butterfly","family":"Butterfly","level":"Foundation","category":["Frontbend"],"code":"0001FBBUTF-P","type":"Parent pose","difficulty":7,"description":"Butterfly pose is a foundation pose that stretches the groin and less so, the hamstrings, depending on how far your feet are away from you. To enter the pose, sit with back straight legs outstretched. You then bend your knees and bring your feet together and towards your body in one movement, sometimes it helps to guide your feet while cupping them with your hands. The deal progression for this pose to to have your knee flush with the floor and the feet only a few centimetres away from your groin.","id":"butterfly","familyIndex":0,"prereq":null},{"name":"Single foot in armpit pose","family":"Butterfly","level":"Beginner","category":["Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"single_foot_in_armpit_pose","familyIndex":1,"prereq":"butterfly"},{"name":"Double foot in armpit pose","family":"Butterfly","level":"Intermedate","category":["Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"double_foot_in_armpit_pose","familyIndex":2,"prereq":"single_foot_in_armpit_pose"}],"Box split":[{"name":"Frog","family":"Box split","level":"Foundation","category":["Frontbend"],"code":"0001FBFRGF-C","type":"Child pose","difficulty":9,"description":"Frog is one of the great first stages of working towards box splits. The full expression of frog pose is quite challenging, requiring lots of flexibility in the adductors to get the complete inside of both thighs flush with the floor. This pose is ideal for progressions and allows the performer to easily see progress.","id":"frog","familyIndex":0,"prereq":null},{"name":"Pancake","family":"Box split","level":"Foundation","category":["Frontbend"],"code":"","type":"Child pose","difficulty":19,"description":"Pancake is an important foundation pose that enables other poses such as fold through.","id":"pancake","familyIndex":1,"prereq":"frog"},{"name":"Straddle split","family":"Box split","level":"Beginner","category":["Splits"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"straddle_split","familyIndex":2,"prereq":"pancake"},{"name":"Box split","family":"Box split","level":"Intermedate","category":["Splits"],"code":"0001SBXSI-P","type":"Parent pose","difficulty":30,"description":"Box split is one of the great \"big three\" contortion poses that beginners should without question look to master. It has great use both on the floor and in the air as a trick as well as helping to unlock more advanced hip-based poses.","id":"box_split","familyIndex":3,"prereq":"straddle_split"},{"name":"Straddle split handstand","family":"Box split","level":"Intermedate","category":["Balance","Splits"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"straddle_split_handstand","familyIndex":4,"prereq":"box_split"},{"name":"Box split oversplit","family":"Box split","level":"Advanced","category":["Splits"],"code":"0002SBXSA-C","type":"Child pose","difficulty":35,"description":"","id":"box_split_oversplit","familyIndex":5,"prereq":"straddle_split_handstand"}],"Front split":[{"name":"Lunge","family":"Front split","level":"Foundation","category":["Frontbend"],"code":"","type":"Child pose","difficulty":4,"description":"The most simple pose of the lunge sequence. Training pre-requisite for front splits and backbends.","id":"lunge","familyIndex":0,"prereq":null},{"name":"Front split","family":"Front split","level":"Beginner","category":["Splits"],"code":"0001SPFSPB-P","type":"Parent pose","difficulty":26,"description":"","id":"front_split","familyIndex":1,"prereq":"lunge"},{"name":"Front split backbend ankle catch on floor","family":"Front split","level":"Advanced","category":["Backbend","Splits"],"code":"0002SPFSPA-C","type":"Child pose","difficulty":null,"description":"","id":"front_split_backbend_ankle_catch_on_floor","familyIndex":2,"prereq":"front_split"},{"name":"Front split backbend ankle catch standing","family":"Front split","level":"Advanced","category":["Backbend","Splits"],"code":"0003SPFSPA-C","type":"Child pose","difficulty":null,"description":"","id":"front_split_backbend_ankle_catch_standing","familyIndex":3,"prereq":"front_split_backbend_ankle_catch_on_floor"},{"name":"Front split oversplit backbend holding ankle up to 200 degrees","family":"Front split","level":"Advanced","category":["Backbend","Splits"],"code":"0004SPFSPA-C","type":"Child pose","difficulty":null,"description":"","id":"front_split_oversplit_backbend_holding_ankle_up_to","familyIndex":4,"prereq":"front_split_backbend_ankle_catch_standing"},{"name":"Front split oversplit up to 200 degrees","family":"Front split","level":"Advanced","category":["Splits"],"code":"0006SPFSPHA-C","type":"Child pose","difficulty":null,"description":"","id":"front_split_oversplit_up_to_200_degrees","familyIndex":5,"prereq":"front_split_oversplit_backbend_holding_ankle_up_to"},{"name":"Front split oversplit over 200 degrees","family":"Front split","level":"Highly advanced","category":["Splits"],"code":"0005SPFSPHA-C","type":"Child pose","difficulty":null,"description":"","id":"front_split_oversplit_over_200_degrees","familyIndex":6,"prereq":"front_split_oversplit_up_to_200_degrees"}],"Leg behind head":[{"name":"Lunge with hands on floor","family":"Leg behind head","level":"Foundation","category":["Frontbend"],"code":"","type":"Child pose","difficulty":5,"description":"","id":"lunge_with_hands_on_floor","familyIndex":0,"prereq":null},{"name":"Lunge with elbows on floor","family":"Leg behind head","level":"Foundation","category":["Frontbend"],"code":"","type":"Child pose","difficulty":6,"description":"The next progression of lunge is to lower to the floor with a flat back.","id":"lunge_with_elbows_on_floor","familyIndex":1,"prereq":"lunge_with_hands_on_floor"},{"name":"Pidgeon","family":"Leg behind head","level":"Foundation","category":["Frontbend"],"code":"","type":"Child pose","difficulty":7,"description":"Pigeon pose is another great foundation pose. This position is the precursor to much of the leg behind head sequence.","id":"pidgeon","familyIndex":2,"prereq":"lunge_with_elbows_on_floor"},{"name":"Squat","family":"Leg behind head","level":"Foundation","category":["Frontbend"],"code":"","type":"Child pose","difficulty":8,"description":"Squat is a fundamental pose for many hip-related poses.","id":"squat","familyIndex":3,"prereq":"pidgeon"},{"name":"Lunge with chest on floor","family":"Leg behind head","level":"Beginner","category":["Frontbend"],"code":"","type":"Child pose","difficulty":8,"description":"","id":"lunge_with_chest_on_floor","familyIndex":4,"prereq":"squat"},{"name":"Leg behind head","family":"Leg behind head","level":"Beginner","category":["Frontbend"],"code":"","type":"Parent pose","difficulty":28,"description":"Leg behind head is the act of placing one's foot or ankle behind the head, neck, shoulder.","id":"leg_behind_head","familyIndex":5,"prereq":"lunge_with_chest_on_floor"},{"name":"Leg behind head arm balance","family":"Leg behind head","level":"Intermedate","category":["Balance","Frontbend"],"code":"","type":"Child pose","difficulty":34,"description":"Once comfortable with leg behind head a contortionist is able to start playing with different positions and transitions.","id":"leg_behind_head_arm_balance","familyIndex":6,"prereq":"leg_behind_head"},{"name":"Leg behind head standing","family":"Leg behind head","level":"Intermedate","category":["Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"This is a natural progression of the single leg behind head pose.","id":"leg_behind_head_standing","familyIndex":7,"prereq":"leg_behind_head_arm_balance"},{"name":"Leg behind head twisted","family":"Leg behind head","level":"Intermedate","category":["Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"This pose adds another dimension to the regular leg behind head.","id":"leg_behind_head_twisted","familyIndex":8,"prereq":"leg_behind_head_standing"},{"name":"Leg behind head while twisted armbalance","family":"Leg behind head","level":"Advanced","category":["Balance","Frontbend"],"code":"","type":"Child pose","difficulty":35,"description":"A fun progression after leg behind head and the twisted variations have been mastered.","id":"leg_behind_head_while_twisted_armbalance","familyIndex":9,"prereq":"leg_behind_head_twisted"},{"name":"Leg behind head elbowstand","family":"Leg behind head","level":"Advanced","category":["Frontbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"leg_behind_head_elbowstand","familyIndex":10,"prereq":"leg_behind_head_while_twisted_armbalance"},{"name":"Leg behind head handstand","family":"Leg behind head","level":"Advanced","category":["Frontbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"leg_behind_head_handstand","familyIndex":11,"prereq":"leg_behind_head_elbowstand"}],"Leg behind back":[{"name":"Leg behind back","family":"Leg behind back","level":"Advanced","category":["Frontbend"],"code":"","type":"Parent pose","difficulty":38,"description":"This pose is also known as leg under armpit pose and is the natural progression of a contortionist furthering their leg behind head practice.","id":"leg_behind_back","familyIndex":0,"prereq":null},{"name":"Leg behind back while standing","family":"Leg behind back","level":"Advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":40,"description":"","id":"leg_behind_back_while_standing","familyIndex":1,"prereq":"leg_behind_back"},{"name":"Leg behind back with foot under armpit","family":"Leg behind back","level":"Advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":43,"description":"","id":"leg_behind_back_with_foot_under_armpit","familyIndex":2,"prereq":"leg_behind_back_while_standing"},{"name":"Leg behind back twist","family":"Leg behind back","level":"Advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":44,"description":"","id":"leg_behind_back_twist","familyIndex":3,"prereq":"leg_behind_back_with_foot_under_armpit"},{"name":"Leg behind back elbow stand with piked leg","family":"Leg behind back","level":"Advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":51,"description":"","id":"leg_behind_back_elbow_stand_with_piked_leg","familyIndex":4,"prereq":"leg_behind_back_twist"},{"name":"Leg behind back half lotus","family":"Leg behind back","level":"Advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":57,"description":"","id":"leg_behind_back_half_lotus","familyIndex":5,"prereq":"leg_behind_back_elbow_stand_with_piked_leg"},{"name":"Leg behind back half lotus twist","family":"Leg behind back","level":"Advanced","category":["Frontbend","Twist"],"code":"","type":"Child pose","difficulty":59,"description":"","id":"leg_behind_back_half_lotus_twist","familyIndex":6,"prereq":"leg_behind_back_half_lotus"},{"name":"Leg behind back handstand","family":"Leg behind back","level":"Advanced","category":["Frontbend","Balance"],"code":"","type":"Child pose","difficulty":60,"description":"","id":"leg_behind_back_handstand","familyIndex":7,"prereq":"leg_behind_back_half_lotus_twist"},{"name":"Leg behind back with foot under armpit and arms crossed behind back","family":"Leg behind back","level":"Advanced","category":["Dislocation","Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"leg_behind_back_with_foot_under_armpit_and_arms_cr","familyIndex":8,"prereq":"leg_behind_back_handstand"},{"name":"Leg behind back with foot under armpit standing","family":"Leg behind back","level":"Advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"leg_behind_back_with_foot_under_armpit_standing","familyIndex":9,"prereq":"leg_behind_back_with_foot_under_armpit_and_arms_cr"},{"name":"Leg behind back with foot under armpit while twisted","family":"Leg behind back","level":"Advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"leg_behind_back_with_foot_under_armpit_while_twist","familyIndex":10,"prereq":"leg_behind_back_with_foot_under_armpit_standing"},{"name":"Leg behind back with foot under armpit while twisted armbalance","family":"Leg behind back","level":"Advanced","category":["Balance","Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"leg_behind_back_with_foot_under_armpit_while_twist","familyIndex":11,"prereq":"leg_behind_back_with_foot_under_armpit_while_twist"}],"Human Knot":[{"name":"Human Knot","family":"Human Knot","level":"Intermedate","category":["Frontbend"],"code":"","type":"Parent pose","difficulty":35,"description":"Human knot is one of the classic staples of a frontbending performance. This pose is completed by the performer placing both feet behind their neck, crossed at the ankles. The best form for this trick is through keeping the back as flat as possible with the hips doing as much of the work as they will allow. The most basic variety of this pose is performing it laying down, doing it this way means that a performer doesn't have to worry about finding their balance as they are placing their feet.","id":"human_knot","familyIndex":0,"prereq":null},{"name":"Human Knot armbalance","family":"Human Knot","level":"Advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":42,"description":"When a performer is able to put their feet behind their head in an upright position this then allows for the transition onto their hands by lifting their body off the ground. Having a flat back in this pose makes lifting off the ground easier and makes it less likely that you will fall forwards.","id":"human_knot_armbalance","familyIndex":1,"prereq":"human_knot"},{"name":"Human Knot and crossed arms behind back","family":"Human Knot","level":"Advanced","category":["Dislocation","Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"human_knot_and_crossed_arms_behind_back","familyIndex":2,"prereq":"human_knot_armbalance"},{"name":"Human Knot handstand","family":"Human Knot","level":"Advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"human_knot_handstand","familyIndex":3,"prereq":"human_knot_and_crossed_arms_behind_back"},{"name":"Human Knot handstand on one arm","family":"Human Knot","level":"Advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"human_knot_handstand_on_one_arm","familyIndex":4,"prereq":"human_knot_handstand"},{"name":"Human knot with ankles under opposite arms on front with arms over legs while on back","family":"Human Knot","level":"Advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"human_knot_with_ankles_under_opposite_arms_on_fron","familyIndex":5,"prereq":"human_knot_handstand_on_one_arm"},{"name":"Human knot with single leg under arm","family":"Human Knot","level":"Advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"human_knot_with_single_leg_under_arm","familyIndex":6,"prereq":"human_knot_with_ankles_under_opposite_arms_on_fron"},{"name":"Human Knot with uneven legs","family":"Human Knot","level":"Advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"human_knot_with_uneven_legs","familyIndex":7,"prereq":"human_knot_with_single_leg_under_arm"},{"name":"Human knot with ankles under opposite arms","family":"Human Knot","level":"Highly advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":59,"description":"More commonly called DeMario pose, this is the pinnacle pose of the leg behind head series of poses (that the vast majority of people that train for it can attain). This pose is extreme in the position that it puts the contortionist in, and even more extreme in the technique needed to get into the pose alone and with the right amount if finess\u00e9 that would be required on stage.","id":"human_knot_with_ankles_under_opposite_arms","familyIndex":8,"prereq":"human_knot_with_uneven_legs"},{"name":"Human knot with ankles under opposite arms and arms crossed behind back on back","family":"Human Knot","level":"Highly advanced","category":["Dislocation","Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"human_knot_with_ankles_under_opposite_arms_and_arm","familyIndex":9,"prereq":"human_knot_with_ankles_under_opposite_arms"},{"name":"Human knot with ankles under opposite arms and arms crossed behind back with chest on the floor","family":"Human Knot","level":"Highly advanced","category":["Dislocation","Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"human_knot_with_ankles_under_opposite_arms_and_arm","familyIndex":10,"prereq":"human_knot_with_ankles_under_opposite_arms_and_arm"},{"name":"Human knot with ankles under opposite arms on front with arms over legs while upright","family":"Human Knot","level":"Highly advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"human_knot_with_ankles_under_opposite_arms_on_fron","familyIndex":11,"prereq":"human_knot_with_ankles_under_opposite_arms_and_arm"}],"Kandasana":[{"name":"Kandasana","family":"Kandasana","level":"Advanced","category":["Frontbend"],"code":"","type":"Parent pose","difficulty":40,"description":"","id":"kandasana","familyIndex":0,"prereq":null},{"name":"Kandasana armbalance","family":"Kandasana","level":"Advanced","category":["Balance","Frontbend"],"code":"","type":"Child pose","difficulty":55,"description":"One of the easier next progressions for kandasana is to elevate the body so that the knees come off the floor.","id":"kandasana_armbalance","familyIndex":1,"prereq":"kandasana"},{"name":"Kandasana Handstand","family":"Kandasana","level":"Advanced","category":["Balance","Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"kandasana_handstand","familyIndex":2,"prereq":"kandasana_armbalance"},{"name":"Kandasana Headstand","family":"Kandasana","level":"Advanced","category":["Balance","Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"kandasana_headstand","familyIndex":3,"prereq":"kandasana_handstand"},{"name":"Kandasana with knees together","family":"Kandasana","level":"Highly advanced","category":["Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"kandasana_with_knees_together","familyIndex":4,"prereq":"kandasana_headstand"}],"Contortion elbowstand":[{"name":"Contortion elbowstand","family":"Contortion elbowstand","level":"Beginner","category":["Backbend","Balance"],"code":"","type":"Parent pose","difficulty":25,"description":"","id":"contortion_elbowstand","familyIndex":0,"prereq":null},{"name":"Contortion elbowstand with straight legs","family":"Contortion elbowstand","level":"Beginner","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_elbowstand_with_straight_legs","familyIndex":1,"prereq":"contortion_elbowstand"},{"name":"Contortion elbowstand in lotus","family":"Contortion elbowstand","level":"Advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_elbowstand_in_lotus","familyIndex":2,"prereq":"contortion_elbowstand_with_straight_legs"},{"name":"Contortion elbowstand with bent crossed legs","family":"Contortion elbowstand","level":"Advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_elbowstand_with_bent_crossed_legs","familyIndex":3,"prereq":"contortion_elbowstand_in_lotus"},{"name":"Contortion elbowstand backfold with straight legs","family":"Contortion elbowstand","level":"Highly advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_elbowstand_backfold_with_straight_legs","familyIndex":4,"prereq":"contortion_elbowstand_with_bent_crossed_legs"},{"name":"Contortion elbowstand headsit holding feet","family":"Contortion elbowstand","level":"Highly advanced","category":[],"code":"","type":"","difficulty":null,"description":"","id":"contortion_elbowstand_headsit_holding_feet","familyIndex":5,"prereq":"contortion_elbowstand_backfold_with_straight_legs"},{"name":"Contortion elbowstand headsit with single leg straight","family":"Contortion elbowstand","level":"Highly advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_elbowstand_headsit_with_single_leg_stra","familyIndex":6,"prereq":"contortion_elbowstand_headsit_holding_feet"}],"Contortion handstand":[{"name":"Contortion handstand","family":"Contortion handstand","level":"Intermedate","category":["Backbend","Balance"],"code":"","type":"Parent pose","difficulty":null,"description":"","id":"contortion_handstand","familyIndex":0,"prereq":null},{"name":"Contortion handstand with single leg stag","family":"Contortion handstand","level":"Intermedate","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_with_single_leg_stag","familyIndex":1,"prereq":"contortion_handstand"},{"name":"Contortion handstand with stagged legs","family":"Contortion handstand","level":"Intermedate","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_with_stagged_legs","familyIndex":2,"prereq":"contortion_handstand_with_single_leg_stag"},{"name":"Contortion handstand with straight legs","family":"Contortion handstand","level":"Intermedate","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_with_straight_legs","familyIndex":3,"prereq":"contortion_handstand_with_stagged_legs"},{"name":"Contortion handstand headsit with straight legs","family":"Contortion handstand","level":"Advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_headsit_with_straight_legs","familyIndex":4,"prereq":"contortion_handstand_with_straight_legs"},{"name":"Contortion handstand with bent legs and arms crossed","family":"Contortion handstand","level":"Advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_with_bent_legs_and_arms_cross","familyIndex":5,"prereq":"contortion_handstand_headsit_with_straight_legs"},{"name":"Contortion handstand with feet tucked under armpits","family":"Contortion handstand","level":"Advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_with_feet_tucked_under_armpit","familyIndex":6,"prereq":"contortion_handstand_with_bent_legs_and_arms_cross"},{"name":"Contortion handstand with single leg bent on one arm","family":"Contortion handstand","level":"Advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_with_single_leg_bent_on_one_a","familyIndex":7,"prereq":"contortion_handstand_with_feet_tucked_under_armpit"},{"name":"Contortion handstand with straight legs (Vertical)","family":"Contortion handstand","level":"Advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_with_straight_legs_vertical","familyIndex":8,"prereq":"contortion_handstand_with_single_leg_bent_on_one_a"},{"name":"Contortion Mexican handstand kinked back with bent legs","family":"Contortion handstand","level":"Advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_mexican_handstand_kinked_back_with_bent","familyIndex":9,"prereq":"contortion_handstand_with_straight_legs_vertical"},{"name":"Contortion Mexican handstand kinked back with straight legs","family":"Contortion handstand","level":"Advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_mexican_handstand_kinked_back_with_stra","familyIndex":10,"prereq":"contortion_mexican_handstand_kinked_back_with_bent"},{"name":"Contortion Mexican on canes handstand kinked back with bent legs","family":"Contortion handstand","level":"Advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_mexican_on_canes_handstand_kinked_back_","familyIndex":11,"prereq":"contortion_mexican_handstand_kinked_back_with_stra"},{"name":"Contortion handstand backfold on canes with straight legs","family":"Contortion handstand","level":"Highly advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_backfold_on_canes_with_straig","familyIndex":12,"prereq":"contortion_mexican_on_canes_handstand_kinked_back_"},{"name":"Contortion handstand backfold with bent legs wide","family":"Contortion handstand","level":"Highly advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_backfold_with_bent_legs_wide","familyIndex":13,"prereq":"contortion_handstand_backfold_on_canes_with_straig"},{"name":"Contortion handstand backfold with straight legs","family":"Contortion handstand","level":"Highly advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_backfold_with_straight_legs","familyIndex":14,"prereq":"contortion_handstand_backfold_with_bent_legs_wide"},{"name":"Contortion handstand headsit bent legs","family":"Contortion handstand","level":"Highly advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_headsit_bent_legs","familyIndex":15,"prereq":"contortion_handstand_backfold_with_straight_legs"},{"name":"Contortion handstand headsit with bent legs together","family":"Contortion handstand","level":"Highly advanced","category":["Backbend","Balance"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_headsit_with_bent_legs_togeth","familyIndex":16,"prereq":"contortion_handstand_headsit_bent_legs"},{"name":"Contortion handstand with leg behind back and bent front leg","family":"Contortion handstand","level":"Highly advanced","category":["Backbend","Balance","Frontbend"],"code":"","type":"Child pose","difficulty":null,"description":"","id":"contortion_handstand_with_leg_behind_back_and_bent","familyIndex":17,"prereq":"contortion_handstand_headsit_with_bent_legs_togeth"}]}};
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const COL_SPACING = 160;
+const LEFT_PAD = 90;
+const NODE_R = 42;
+const INNER_R = 34;
+const ROW_SPACING = 140;
+const SECTION_BAND_H = 80;
+const COL_LABEL_H = 40;
+const NODE_TOP_PAD = 60; // extra spacing before first node
+const SVG_WIDTH = LEFT_PAD * 2 + 14 * COL_SPACING; // 90 + 14*160 + 90 = 2420... corrected below
+const NUM_COLS = 15;
+const TOTAL_WIDTH = LEFT_PAD + (NUM_COLS - 1) * COL_SPACING + LEFT_PAD; // 90+14*160+90=2420... let me recalc
+
+// SVG total width: 90 + 15 * 160 + 90 = 2580px (col centers at 90, 250, ..., 90+14*160=2330, right edge 2420+90=2510... 
+// Actually: col 0 center = 90, col 14 center = 90 + 14*160 = 2330, right edge = 2330 + 90 = 2420
+// But spec says 90 + 15*160 + 90 = 2580. Let's use spec.
+const SVG_TOTAL_W = 2580;
+
+const NS = "http://www.w3.org/2000/svg";
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let unlockedIds = new Set();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem('contortion_unlocked');
+    if (raw) {
+      unlockedIds = new Set(JSON.parse(raw));
+    }
+  } catch(e) { unlockedIds = new Set(); }
+}
+
+function saveState() {
+  localStorage.setItem('contortion_unlocked', JSON.stringify([...unlockedIds]));
+}
+
+// ─── Pose lookup ──────────────────────────────────────────────────────────────
+const allPoses = {}; // id -> pose
+const poseNodes = {}; // id -> SVG <g> element
+
+for (const [fam, poses] of Object.entries(SKILL_DATA.families)) {
+  for (const p of poses) {
+    allPoses[p.id] = p;
+  }
+}
+
+// ─── Geometry ────────────────────────────────────────────────────────────────
+function hexPoints(cx, cy, r) {
+  const pts = [];
+  for (let i = 0; i < 6; i++) {
+    const angle = (i * 60 - 90) * Math.PI / 180;
+    pts.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle)]);
+  }
+  return pts.map(p => p.join(',')).join(' ');
+}
+
+function colX(colIndex) {
+  return LEFT_PAD + colIndex * COL_SPACING;
+}
+
+function nodeY(rowIndex) {
+  return SECTION_BAND_H + COL_LABEL_H + NODE_TOP_PAD + rowIndex * ROW_SPACING;
+}
+
+// ─── SVG helpers ──────────────────────────────────────────────────────────────
+function svgEl(tag, attrs = {}) {
+  const el = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    el.setAttribute(k, v);
+  }
+  return el;
+}
+
+function svgText(content, attrs = {}) {
+  const el = svgEl('text', attrs);
+  el.textContent = content;
+  return el;
+}
+
+// ─── Build SVG ────────────────────────────────────────────────────────────────
+function buildSVG() {
+  const svg = document.getElementById('skill-svg');
+  svg.innerHTML = '';
+
+  // Calculate total height
+  const maxRows = Math.max(...Object.values(SKILL_DATA.families).map(poses => poses.length));
+  const totalH = SECTION_BAND_H + COL_LABEL_H + NODE_TOP_PAD + maxRows * ROW_SPACING + 80;
+
+  svg.setAttribute('width', SVG_TOTAL_W);
+  svg.setAttribute('height', totalH);
+  svg.setAttribute('viewBox', `0 0 ${SVG_TOTAL_W} ${totalH}`);
+
+  // ── Defs (glow filters) ──────────────────────────────────────────────────
+  const defs = svgEl('defs');
+
+  // Create glow filters for each family color
+  for (const [fam, color] of Object.entries(SKILL_DATA.familyColors)) {
+    const col = SKILL_DATA.familyCol[fam];
+    const filterId = `glow-${col}`;
+    const filter = svgEl('filter', { id: filterId, x: '-50%', y: '-50%', width: '200%', height: '200%' });
+    const blur = svgEl('feGaussianBlur', { stdDeviation: '4', result: 'blur' });
+    const colorMatrix = svgEl('feColorMatrix', {
+      type: 'matrix',
+      values: '0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.9 0',
+      result: 'glow'
+    });
+    // Parse hex color to RGB fractions for the matrix
+    const r = parseInt(color.slice(1,3),16)/255;
+    const g = parseInt(color.slice(3,5),16)/255;
+    const b = parseInt(color.slice(5,7),16)/255;
+    colorMatrix.setAttribute('values', `0 0 0 0 ${r.toFixed(3)}  0 0 0 0 ${g.toFixed(3)}  0 0 0 0 ${b.toFixed(3)}  0 0 0 0.8 0`);
+    const merge = svgEl('feMerge');
+    const mn1 = svgEl('feMergeNode', { in: 'glow' });
+    const mn2 = svgEl('feMergeNode', { in: 'SourceGraphic' });
+    merge.appendChild(mn1);
+    merge.appendChild(mn2);
+    filter.appendChild(blur);
+    filter.appendChild(colorMatrix);
+    filter.appendChild(merge);
+    defs.appendChild(filter);
+  }
+  svg.appendChild(defs);
+
+  // ── Background ────────────────────────────────────────────────────────────
+  const bg = svgEl('rect', { width: SVG_TOTAL_W, height: totalH, fill: '#0b0e1c' });
+  svg.appendChild(bg);
+
+  // ── Section backgrounds and labels ───────────────────────────────────────
+  for (const section of SKILL_DATA.sections) {
+    const colIndices = section.families.map(f => SKILL_DATA.familyCol[f]);
+    const minCol = Math.min(...colIndices);
+    const maxCol = Math.max(...colIndices);
+    const x1 = colX(minCol) - COL_SPACING / 2;
+    const x2 = colX(maxCol) + COL_SPACING / 2;
+    const w = x2 - x1;
+
+    // Background strip (subtle)
+    const bgRect = svgEl('rect', {
+      x: x1, y: 0,
+      width: w, height: totalH,
+      fill: section.color,
+      opacity: '0.04'
+    });
+    svg.appendChild(bgRect);
+
+    // Section band at top
+    const bandRect = svgEl('rect', {
+      x: x1 + 4, y: 8,
+      width: w - 8, height: SECTION_BAND_H - 16,
+      fill: section.color,
+      opacity: '0.12',
+      rx: '6'
+    });
+    svg.appendChild(bandRect);
+
+    // Section pill border
+    const bandBorder = svgEl('rect', {
+      x: x1 + 4, y: 8,
+      width: w - 8, height: SECTION_BAND_H - 16,
+      fill: 'none',
+      stroke: section.color,
+      'stroke-opacity': '0.35',
+      'stroke-width': '1',
+      rx: '6'
+    });
+    svg.appendChild(bandBorder);
+
+    // Section label text
+    const labelX = x1 + w / 2;
+    const labelY = SECTION_BAND_H / 2 + 5;
+    const sectionLabel = svgText(section.name, {
+      x: labelX, y: labelY,
+      fill: section.color,
+      'font-family': "'Courier New', Courier, monospace",
+      'font-size': '13',
+      'font-weight': 'bold',
+      'letter-spacing': '3',
+      'text-anchor': 'middle',
+      'dominant-baseline': 'middle',
+      'text-transform': 'uppercase'
+    });
+    svg.appendChild(sectionLabel);
+  }
+
+  // ── Family column separators ──────────────────────────────────────────────
+  for (let i = 0; i < NUM_COLS - 1; i++) {
+    const lx = colX(i) + COL_SPACING / 2;
+    const sepLine = svgEl('line', {
+      x1: lx, y1: SECTION_BAND_H,
+      x2: lx, y2: totalH,
+      stroke: 'rgba(255,255,255,0.04)',
+      'stroke-width': '1'
+    });
+    svg.appendChild(sepLine);
+  }
+
+  // ── Family column labels ───────────────────────────────────────────────────
+  for (const [fam, colIdx] of Object.entries(SKILL_DATA.familyCol)) {
+    const cx = colX(colIdx);
+    const cy = SECTION_BAND_H + COL_LABEL_H / 2 + 4;
+    const color = SKILL_DATA.familyColors[fam];
+
+    const labelText = svgText(fam, {
+      x: cx, y: cy,
+      fill: color,
+      'font-family': "'Courier New', Courier, monospace",
+      'font-size': '10',
+      'letter-spacing': '1',
+      'text-anchor': 'middle',
+      'dominant-baseline': 'middle',
+      opacity: '0.7'
+    });
+    svg.appendChild(labelText);
+  }
+
+  // ── Connection lines and nodes per family ─────────────────────────────────
+  const linesLayer = svgEl('g', { id: 'lines-layer' });
+  const nodesLayer = svgEl('g', { id: 'nodes-layer' });
+  svg.appendChild(linesLayer);
+  svg.appendChild(nodesLayer);
+
+  for (const [fam, poses] of Object.entries(SKILL_DATA.families)) {
+    const colIdx = SKILL_DATA.familyCol[fam];
+    const cx = colX(colIdx);
+    const famColor = SKILL_DATA.familyColors[fam];
+
+    // Sort poses by familyIndex
+    const sorted = [...poses].sort((a, b) => a.familyIndex - b.familyIndex);
+
+    // Draw connector lines first
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const p1 = sorted[i];
+      const p2 = sorted[i + 1];
+      const y1 = nodeY(p1.familyIndex);
+      const y2 = nodeY(p2.familyIndex);
+      const lineEl = svgEl('line', {
+        x1: cx, y1: y1 + NODE_R,
+        x2: cx, y2: y2 - NODE_R,
+        stroke: 'rgba(255,255,255,0.1)',
+        'stroke-width': '2',
+        'stroke-dasharray': '4',
+        'data-from': p1.id,
+        'data-to': p2.id,
+        id: `line-${p1.id}-${p2.id}`
+      });
+      linesLayer.appendChild(lineEl);
+    }
+
+    // Draw nodes
+    for (const pose of sorted) {
+      const g = buildNode(pose, cx, nodeY(pose.familyIndex));
+      nodesLayer.appendChild(g);
+      poseNodes[pose.id] = g;
+    }
+  }
+}
+
+// ─── Build a single node ──────────────────────────────────────────────────────
+function buildNode(pose, cx, cy) {
+  const fam = pose.family;
+  const famColor = SKILL_DATA.familyColors[fam];
+  const colIdx = SKILL_DATA.familyCol[fam];
+  const isUnlocked = unlockedIds.has(pose.id);
+
+  const g = svgEl('g', {
+    id: `node-${pose.id}`,
+    class: 'skill-node',
+    cursor: 'pointer',
+    'data-id': pose.id
+  });
+
+  g.setAttribute('transform', `translate(0,0)`);
+
+  // Outer hex
+  const outerFill = isUnlocked ? '#0f1628' : '#090c1a';
+  const outerStroke = isUnlocked ? famColor : '#2a2e3e';
+  const outerOpacity = isUnlocked ? '1' : '0.7';
+  const outerFilter = isUnlocked ? `url(#glow-${colIdx})` : 'none';
+
+  const outerHex = svgEl('polygon', {
+    points: hexPoints(cx, cy, NODE_R),
+    fill: outerFill,
+    stroke: outerStroke,
+    'stroke-width': isUnlocked ? '2' : '1',
+    opacity: outerOpacity,
+    class: 'outer-hex',
+    filter: outerFilter
+  });
+  g.appendChild(outerHex);
+
+  // Inner hex
+  const innerFill = isUnlocked
+    ? `${famColor}18`
+    : '#0b0e1c';
+  const innerHex = svgEl('polygon', {
+    points: hexPoints(cx, cy, INNER_R),
+    fill: innerFill,
+    stroke: isUnlocked ? famColor : '#1e2235',
+    'stroke-width': '1',
+    opacity: isUnlocked ? '0.8' : '0.5',
+    class: 'inner-hex'
+  });
+  g.appendChild(innerHex);
+
+  if (isUnlocked) {
+    // Family color chip at top
+    const chipY = cy - NODE_R + 10;
+    const chip = svgEl('line', {
+      x1: cx - 12, y1: chipY,
+      x2: cx + 12, y2: chipY,
+      stroke: famColor,
+      'stroke-width': '3',
+      'stroke-linecap': 'round',
+      opacity: '0.8',
+      class: 'family-chip'
+    });
+    g.appendChild(chip);
+
+    // Pose name (truncated)
+    let displayName = pose.name;
+    if (displayName.length > 18) displayName = displayName.slice(0, 17) + '\u2026';
+
+    // Wrap name into two lines if long
+    const words = pose.name.split(' ');
+    const lines = [];
+    let current = '';
+    for (const w of words) {
+      if ((current + ' ' + w).trim().length > 12 && current.length > 0) {
+        lines.push(current.trim());
+        current = w;
+      } else {
+        current = (current + ' ' + w).trim();
+      }
+      if (lines.length >= 3) break;
+    }
+    if (current && lines.length < 3) lines.push(current.trim());
+    // Truncate last line
+    if (lines.length > 0 && lines[lines.length - 1].length > 14) {
+      lines[lines.length - 1] = lines[lines.length - 1].slice(0,13) + '\u2026';
+    }
+
+    const lineH = 12;
+    const startY = cy - (lines.length - 1) * lineH / 2;
+    lines.forEach((line, li) => {
+      const txt = svgText(line, {
+        x: cx,
+        y: startY + li * lineH,
+        fill: '#ffffff',
+        'font-family': "'Courier New', Courier, monospace",
+        'font-size': '9',
+        'text-anchor': 'middle',
+        'dominant-baseline': 'middle',
+        'font-weight': 'bold',
+        class: 'pose-name-text',
+        opacity: '0.9'
+      });
+      g.appendChild(txt);
+    });
+
+    // Difficulty badge (bottom-right corner area)
+    if (pose.difficulty != null) {
+      const badgeX = cx + 22;
+      const badgeY = cy + 28;
+      const badgeCirc = svgEl('circle', {
+        cx: badgeX, cy: badgeY, r: '11',
+        fill: '#0b0e1c',
+        stroke: famColor,
+        'stroke-width': '1',
+        opacity: '0.9',
+        class: 'diff-badge'
+      });
+      g.appendChild(badgeCirc);
+      const badgeTxt = svgText(String(pose.difficulty), {
+        x: badgeX, y: badgeY,
+        fill: famColor,
+        'font-family': "'Courier New', Courier, monospace",
+        'font-size': '8',
+        'font-weight': 'bold',
+        'text-anchor': 'middle',
+        'dominant-baseline': 'middle',
+        class: 'diff-text'
+      });
+      g.appendChild(badgeTxt);
+    }
+
+  } else {
+    // Padlock icon
+    const g2 = svgEl('g', {
+      transform: `translate(${cx}, ${cy - 4})`,
+      stroke: '#ffffff',
+      'stroke-width': '1.5',
+      fill: 'none',
+      opacity: '0.5',
+      class: 'lock-icon'
+    });
+    // Shackle arc
+    const arc = svgEl('path', {
+      d: 'M -6,-8 a6,6 0 0,1 12,0 L 6,0 L -6,0 Z',
+      fill: 'none',
+      stroke: '#ffffff',
+      'stroke-width': '1.5',
+      'stroke-linejoin': 'round'
+    });
+    // Actually draw shackle as a proper arc
+    const shackle = svgEl('path', {
+      d: 'M -5,0 L -5,-7 a5,5 0 0,1 10,0 L 5,0',
+      fill: 'none'
+    });
+    // Lock body rectangle
+    const body = svgEl('rect', {
+      x: '-8', y: '0',
+      width: '16', height: '13',
+      rx: '2',
+      fill: 'rgba(255,255,255,0.08)',
+      stroke: '#ffffff',
+      'stroke-width': '1.5'
+    });
+    // Keyhole
+    const keyhole = svgEl('circle', {
+      cx: '0', cy: '7',
+      r: '2.5',
+      fill: 'rgba(255,255,255,0.2)',
+      stroke: '#ffffff',
+      'stroke-width': '1'
+    });
+    g2.appendChild(shackle);
+    g2.appendChild(body);
+    g2.appendChild(keyhole);
+    g.appendChild(g2);
+  }
+
+  // Hover rect (invisible, for hit area)
+  const hitArea = svgEl('polygon', {
+    points: hexPoints(cx, cy, NODE_R + 2),
+    fill: 'transparent',
+    class: 'hit-area'
+  });
+  g.appendChild(hitArea);
+
+  // Event listeners
+  g.addEventListener('click', () => onNodeClick(pose.id));
+  g.addEventListener('mouseenter', () => onNodeHover(pose.id, true));
+  g.addEventListener('mouseleave', () => onNodeHover(pose.id, false));
+
+  return g;
+}
+
+// ─── Update a node in-place ────────────────────────────────────────────────────
+function rebuildNode(poseId) {
+  const pose = allPoses[poseId];
+  if (!pose) return;
+  const fam = pose.family;
+  const colIdx = SKILL_DATA.familyCol[fam];
+  const cx = colX(colIdx);
+  const cy = nodeY(pose.familyIndex);
+
+  const oldG = poseNodes[poseId];
+  if (!oldG) return;
+  const parent = oldG.parentNode;
+
+  const newG = buildNode(pose, cx, cy);
+  parent.replaceChild(newG, oldG);
+  poseNodes[poseId] = newG;
+
+  // Update connector lines that involve this node
+  updateConnectorLines(pose);
+}
+
+function updateConnectorLines(pose) {
+  const fam = pose.family;
+  const colIdx = SKILL_DATA.familyCol[fam];
+  const cx = colX(colIdx);
+  const famColor = SKILL_DATA.familyColors[fam];
+
+  const poses = SKILL_DATA.families[fam].sort((a, b) => a.familyIndex - b.familyIndex);
+  const idx = poses.findIndex(p => p.id === pose.id);
+
+  // Update line from previous to this
+  if (idx > 0) {
+    const prev = poses[idx - 1];
+    const lineEl = document.getElementById(`line-${prev.id}-${pose.id}`);
+    if (lineEl) {
+      const bothUnlocked = unlockedIds.has(prev.id) && unlockedIds.has(pose.id);
+      if (bothUnlocked) {
+        lineEl.setAttribute('stroke', famColor);
+        lineEl.setAttribute('opacity', '0.5');
+        lineEl.removeAttribute('stroke-dasharray');
+      } else {
+        lineEl.setAttribute('stroke', 'rgba(255,255,255,0.1)');
+        lineEl.setAttribute('opacity', '1');
+        lineEl.setAttribute('stroke-dasharray', '4');
+      }
+    }
+  }
+
+  // Update line from this to next
+  if (idx < poses.length - 1) {
+    const next = poses[idx + 1];
+    const lineEl = document.getElementById(`line-${pose.id}-${next.id}`);
+    if (lineEl) {
+      const bothUnlocked = unlockedIds.has(pose.id) && unlockedIds.has(next.id);
+      if (bothUnlocked) {
+        lineEl.setAttribute('stroke', famColor);
+        lineEl.setAttribute('opacity', '0.5');
+        lineEl.removeAttribute('stroke-dasharray');
+      } else {
+        lineEl.setAttribute('stroke', 'rgba(255,255,255,0.1)');
+        lineEl.setAttribute('opacity', '1');
+        lineEl.setAttribute('stroke-dasharray', '4');
+      }
+    }
+  }
+}
+
+// ─── Node interactions ────────────────────────────────────────────────────────
+function onNodeClick(poseId) {
+  const pose = allPoses[poseId];
+  if (!pose) return;
+
+  if (unlockedIds.has(poseId)) {
+    // Open detail panel for unlocked node
+    openDetailPanel(poseId);
+  } else {
+    // Try to unlock
+    const canUnlock = canUnlockPose(poseId);
+    if (canUnlock) {
+      unlockPose(poseId);
+      updateHeaderProgress();
+    } else {
+      // Shake animation
+      const g = poseNodes[poseId];
+      if (g) {
+        g.classList.remove('anim-shake');
+        void g.offsetWidth; // reflow
+        g.classList.add('anim-shake');
+        setTimeout(() => g.classList.remove('anim-shake'), 500);
+      }
+      // Show detail panel with prereq info
+      openDetailPanel(poseId);
+    }
+  }
+}
+
+function onNodeHover(poseId, entering) {
+  const g = poseNodes[poseId];
+  if (!g) return;
+  const outerHex = g.querySelector('.outer-hex');
+  if (!outerHex) return;
+  const pose = allPoses[poseId];
+  const famColor = SKILL_DATA.familyColors[pose.family];
+  const isUnlocked = unlockedIds.has(poseId);
+
+  if (entering) {
+    outerHex.setAttribute('opacity', '1');
+    if (!isUnlocked) {
+      outerHex.setAttribute('stroke', '#4a5060');
+    }
+  } else {
+    outerHex.setAttribute('opacity', isUnlocked ? '1' : '0.7');
+    if (!isUnlocked) {
+      outerHex.setAttribute('stroke', '#2a2e3e');
+    }
+  }
+}
+
+function canUnlockPose(poseId) {
+  const pose = allPoses[poseId];
+  if (!pose) return false;
+  if (pose.prereq === null || pose.prereq === undefined || pose.prereq === '') return true;
+  return unlockedIds.has(pose.prereq);
+}
+
+function unlockPose(poseId) {
+  unlockedIds.add(poseId);
+  saveState();
+  rebuildNode(poseId);
+
+  // Animate the new node
+  const g = poseNodes[poseId];
+  if (g) {
+    g.classList.add('anim-unlock');
+    setTimeout(() => g.classList.remove('anim-unlock'), 500);
+  }
+
+  // Also update lines
+  updateConnectorLines(allPoses[poseId]);
+}
+
+function lockPose(poseId) {
+  unlockedIds.delete(poseId);
+  saveState();
+  rebuildNode(poseId);
+  updateConnectorLines(allPoses[poseId]);
+  updateHeaderProgress();
+  closeDetailPanel();
+}
+
+// ─── Detail panel ─────────────────────────────────────────────────────────────
+let currentDetailPoseId = null;
+
+function openDetailPanel(poseId) {
+  const pose = allPoses[poseId];
+  if (!pose) return;
+  currentDetailPoseId = poseId;
+
+  const famColor = SKILL_DATA.familyColors[pose.family];
+  const isUnlocked = unlockedIds.has(poseId);
+
+  // Name
+  document.getElementById('dp-name').textContent = pose.name;
+
+  // Badges
+  const badgesEl = document.getElementById('dp-badges');
+  badgesEl.innerHTML = '';
+
+  // Level badge
+  const levelBadge = document.createElement('span');
+  levelBadge.className = 'badge badge-level-' + (pose.level || '').toLowerCase().replace(/\s+/g, '-');
+  levelBadge.textContent = pose.level || 'Unknown';
+  badgesEl.appendChild(levelBadge);
+
+  // Category badges
+  (pose.category || []).forEach(cat => {
+    const catBadge = document.createElement('span');
+    catBadge.className = 'badge badge-cat';
+    catBadge.textContent = cat;
+    badgesEl.appendChild(catBadge);
+  });
+
+  // Family badge
+  const famBadge = document.createElement('span');
+  famBadge.className = 'badge badge-family';
+  famBadge.style.color = famColor;
+  famBadge.style.borderColor = famColor + '60';
+  famBadge.textContent = pose.family;
+  badgesEl.appendChild(famBadge);
+
+  // Difficulty
+  const diffEl = document.getElementById('dp-difficulty');
+  if (pose.difficulty != null) {
+    diffEl.innerHTML = `Difficulty: <span>${pose.difficulty}</span> / 100`;
+  } else {
+    diffEl.innerHTML = '';
+  }
+
+  // Description
+  document.getElementById('dp-description').textContent = pose.description || '';
+
+  // Code
+  const codeEl = document.getElementById('dp-code');
+  if (pose.code) {
+    codeEl.textContent = pose.code;
+  } else {
+    codeEl.textContent = '';
+  }
+
+  // Action button
+  const btn = document.getElementById('detail-action-btn');
+  const warnEl = document.getElementById('prereq-warning');
+
+  if (isUnlocked) {
+    btn.textContent = 'Lock';
+    btn.className = 'lock';
+    warnEl.textContent = '';
+  } else {
+    const canUnlock = canUnlockPose(poseId);
+    btn.textContent = 'Unlock';
+    btn.className = 'unlock';
+    if (!canUnlock && pose.prereq) {
+      const prereqPose = allPoses[pose.prereq];
+      warnEl.textContent = prereqPose
+        ? `Requires: ${prereqPose.name}`
+        : `Requires: ${pose.prereq}`;
+    } else {
+      warnEl.textContent = '';
+    }
+  }
+
+  // Show panel
+  document.getElementById('detail-panel').classList.add('open');
+}
+
+function closeDetailPanel() {
+  document.getElementById('detail-panel').classList.remove('open');
+  currentDetailPoseId = null;
+}
+
+// Action button handler
+document.getElementById('detail-action-btn').addEventListener('click', () => {
+  if (!currentDetailPoseId) return;
+  const isUnlocked = unlockedIds.has(currentDetailPoseId);
+  if (isUnlocked) {
+    lockPose(currentDetailPoseId);
+  } else {
+    const canUnlock = canUnlockPose(currentDetailPoseId);
+    if (canUnlock) {
+      unlockPose(currentDetailPoseId);
+      updateHeaderProgress();
+      // Refresh panel
+      openDetailPanel(currentDetailPoseId);
+    } else {
+      document.getElementById('prereq-warning').textContent = '\u26a0 Unlock prerequisites first!';
+    }
+  }
+});
+
+document.getElementById('detail-close').addEventListener('click', closeDetailPanel);
+
+// ─── Header progress ──────────────────────────────────────────────────────────
+function updateHeaderProgress() {
+  const totalPoses = Object.keys(allPoses).length;
+  const totalUnlocked = unlockedIds.size;
+  document.getElementById('progress-info').textContent =
+    `${totalUnlocked} / ${totalPoses} poses unlocked`;
+
+  // Section bars
+  const barsContainer = document.getElementById('section-bars');
+  const bars = barsContainer.querySelectorAll('.section-bar-fill');
+  SKILL_DATA.sections.forEach((section, si) => {
+    let sectionTotal = 0;
+    let sectionUnlocked = 0;
+    for (const fam of section.families) {
+      const poses = SKILL_DATA.families[fam] || [];
+      sectionTotal += poses.length;
+      sectionUnlocked += poses.filter(p => unlockedIds.has(p.id)).length;
+    }
+    if (bars[si]) {
+      const pct = sectionTotal > 0 ? (sectionUnlocked / sectionTotal * 100) : 0;
+      bars[si].style.width = pct + '%';
+    }
+  });
+}
+
+function buildSectionBars() {
+  const barsContainer = document.getElementById('section-bars');
+  barsContainer.innerHTML = '';
+  SKILL_DATA.sections.forEach(section => {
+    let sectionTotal = 0;
+    for (const fam of section.families) {
+      sectionTotal += (SKILL_DATA.families[fam] || []).length;
+    }
+
+    const item = document.createElement('div');
+    item.className = 'section-bar-item';
+
+    const label = document.createElement('div');
+    label.className = 'section-bar-label';
+    // Shorten long names
+    const shortName = section.name.length > 14
+      ? section.name.replace('FRONTBENDS & SPLITS', 'FRONTBENDS').replace('ADVANCED BALANCE', 'BALANCE')
+      : section.name;
+    label.textContent = shortName;
+
+    const track = document.createElement('div');
+    track.className = 'section-bar-track';
+
+    const fill = document.createElement('div');
+    fill.className = 'section-bar-fill';
+    fill.style.background = section.color;
+    fill.style.width = '0%';
+
+    track.appendChild(fill);
+    item.appendChild(label);
+    item.appendChild(track);
+    barsContainer.appendChild(item);
+  });
+}
+
+// ─── Reset ─────────────────────────────────────────────────────────────────────
+document.getElementById('reset-btn').addEventListener('click', () => {
+  if (confirm('Reset all progress? This cannot be undone.')) {
+    unlockedIds.clear();
+    saveState();
+    buildSVG();
+    updateHeaderProgress();
+    closeDetailPanel();
+  }
+});
+
+// ─── Init ──────────────────────────────────────────────────────────────────────
+loadState();
+buildSectionBars();
+buildSVG();
+updateHeaderProgress();
+
+// After initial build, update all connector lines for unlocked poses
+for (const poseId of unlockedIds) {
+  const pose = allPoses[poseId];
+  if (pose) updateConnectorLines(pose);
+}
+
+</script>
+</body>
+</html>
