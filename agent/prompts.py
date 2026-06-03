@@ -39,7 +39,21 @@ Build a list of matched performer Notion page IDs (for the Notion article)
 and their Instagram handles.
 
 ──────────────────────────────────────────────────
-PHASE 3 — ARTICLE WRITING + NOTION
+PHASE 3a — IMAGE GENERATION
+──────────────────────────────────────────────────
+Call generate_images with the month label and the list of matched performer
+Notion page IDs (up to 16). The tool will:
+  • Download each performer's main photo from Notion
+  • Composite them into the brand template (scattered rotated cards, dark bg)
+  • Output an Instagram Story (1080×1920) saved locally
+  • Output an article header (1500×844) saved locally AND uploaded to Webflow
+  • Return the Webflow asset ID for the header image
+
+Note the returned webflow_asset_id — you will need it in Phase 4 to set the
+hero image on the blog post.
+
+──────────────────────────────────────────────────
+PHASE 3b — ARTICLE WRITING + NOTION
 ──────────────────────────────────────────────────
 Write the full article in Markdown. Requirements:
   - Engaging opening paragraph (the "hook")
@@ -70,16 +84,20 @@ Call webflow_create_blog_draft with:
   - description: A single compelling sentence (used as the meta description)
   - body_html: the converted HTML article
   - featured_performer_ids: Webflow item IDs from the previous step
+  - hero_image_asset_id: the webflow_asset_id returned from generate_images
 
 ──────────────────────────────────────────────────
 FINAL RESPONSE
 ──────────────────────────────────────────────────
-Once all four phases are complete, summarise what was done:
+Once all phases are complete, summarise what was done:
   • Research page created (Notion URL)
   • Article created (Notion URL)
   • Number of ICPDB performers matched and linked
+  • Images generated: Story saved to [path], Header saved to [path]
+  • Header image uploaded to Webflow Assets
+  • Instagram Story PNG location (for manual posting)
   • Webflow draft created (editor URL + preview URL)
-  • Tell the user: "Your draft is ready for review in Webflow."
+  • Tell the user: "Your draft is ready for review in Webflow. The Instagram Story image is saved locally — review and post when ready."
 """
 
 

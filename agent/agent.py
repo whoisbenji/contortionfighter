@@ -19,6 +19,7 @@ from .tools import (
     notion_list_performers_in_icpdb,
     webflow_find_performers,
     webflow_create_blog_draft,
+    generate_images,
 )
 
 MODEL = "claude-sonnet-4-6"
@@ -121,6 +122,26 @@ TOOLS: list[dict] = [
         },
     },
     {
+        "name": "generate_images",
+        "description": (
+            "Generate the Instagram Story (1080×1920) and article header (1500×844) images "
+            "using performer photos from the Notion ICPDB. Uploads the header to Webflow Assets. "
+            "Call this in Phase 3b, after performer matching and before creating the Webflow draft."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "month_label": {"type": "string", "description": "E.g. 'June 2026'"},
+                "performer_page_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Notion page IDs for the matched performers (up to 16 used).",
+                },
+            },
+            "required": ["month_label", "performer_page_ids"],
+        },
+    },
+    {
         "name": "webflow_create_blog_draft",
         "description": (
             "Create a draft Blog Post in Webflow CMS with the article content. "
@@ -138,6 +159,10 @@ TOOLS: list[dict] = [
                     "items": {"type": "string"},
                     "description": "Webflow item IDs for the Featured Performers multi-reference field.",
                 },
+                "hero_image_asset_id": {
+                    "type": "string",
+                    "description": "Webflow asset ID for the hero/header image (from generate_images).",
+                },
             },
             "required": ["title", "slug", "description", "body_html"],
         },
@@ -152,6 +177,7 @@ TOOL_FUNCTIONS = {
     "notion_list_performers_in_icpdb": notion_list_performers_in_icpdb,
     "notion_search_performer": notion_search_performer,
     "notion_create_article_page": notion_create_article_page,
+    "generate_images": generate_images,
     "webflow_find_performers": webflow_find_performers,
     "webflow_create_blog_draft": webflow_create_blog_draft,
 }

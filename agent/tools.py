@@ -242,6 +242,7 @@ def webflow_create_blog_draft(
     description: str,
     body_html: str,
     featured_performer_ids: list[str],
+    hero_image_asset_id: str | None = None,
 ) -> dict:
     """
     Create a draft Blog Post item in Webflow CMS.
@@ -257,6 +258,8 @@ def webflow_create_blog_draft(
     }
     if featured_performer_ids:
         field_data[WF_FIELD_FEAT_PERFORMERS] = featured_performer_ids
+    if hero_image_asset_id:
+        field_data["hero-image"] = {"assetId": hero_image_asset_id}
 
     payload = {"fieldData": field_data, "isDraft": True}
     resp = requests.post(
@@ -319,6 +322,18 @@ def _rich_text(text: str) -> list[dict]:
         elif plain:
             parts.append({"type": "text", "text": {"content": plain}})
     return parts or [{"type": "text", "text": {"content": text}}]
+
+
+# ── Image generation ──────────────────────────────────────────────────────────
+
+def generate_images(month_label: str, performer_page_ids: list[str]) -> dict:
+    """
+    Generate the Story (1080×1920) and Header (1500×844) images for the
+    monthly roundup, upload the header to Webflow, and return local paths
+    plus the Webflow asset ID/URL.
+    """
+    from .compositor import generate_and_upload_images
+    return generate_and_upload_images(month_label, performer_page_ids)
 
 
 def _heading(level: int, text: str) -> dict:
