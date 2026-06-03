@@ -38,7 +38,26 @@ def _slugify(text: str) -> str:
 
 def _raise_for(resp: requests.Response) -> None:
     if not resp.ok:
-        raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:400]}")
+        msg = resp.text[:400]
+        if resp.status_code == 404 and "object_not_found" in msg:
+            raise RuntimeError(
+                f"HTTP 404 – database not found. Make sure you have shared this database "
+                f"with your Notion integration ('Contortion Space Agent'). Full error: {msg}"
+            )
+        raise RuntimeError(f"HTTP {resp.status_code}: {msg}")
+
+
+def _notion_append_blocks(page_id: str, blocks: list[dict]) -> None:
+    """Append blocks to an existing Notion page, chunking to respect the 100-block limit."""
+    for i in range(0, len(blocks), 100):
+        chunk = blocks[i:i + 100]
+        resp = requests.patch(
+            f"{cfg.NOTION_BASE}/blocks/{page_id}/children",
+            headers=_notion_headers(),
+            json={"children": chunk},
+            timeout=30,
+        )
+        _raise_for(resp)
 
 
 # ── web search ───────────────────────────────────────────────────────────────
@@ -90,16 +109,20 @@ def web_search(query: str, max_results: int = 8) -> dict:
 
 def notion_create_research_page(month_label: str, content_markdown: str) -> dict:
     """Create a research-notes page in the Monthly research Notion database."""
+    blocks = _markdown_to_notion_blocks(content_markdown)
+    # Notion allows at most 100 blocks on page creation; append the rest after
     payload = {
         "parent": {"database_id": cfg.get("NOTION_MONTHLY_RESEARCH_DS")},
         "properties": {
             "Research month": {"title": [{"text": {"content": month_label}}]},
         },
-        "children": _markdown_to_notion_blocks(content_markdown),
+        "children": blocks[:100],
     }
     resp = requests.post(f"{cfg.NOTION_BASE}/pages", headers=_notion_headers(), json=payload, timeout=30)
     _raise_for(resp)
     page = resp.json()
+    if len(blocks) > 100:
+        _notion_append_blocks(page["id"], blocks[100:])
     return {"page_id": page["id"], "url": page["url"]}
 
 
@@ -122,14 +145,17 @@ def notion_create_article_page(
     if show_page_ids:
         properties["Shows"] = {"relation": [{"id": sid} for sid in show_page_ids]}
 
+    blocks = _markdown_to_notion_blocks(article_body)
     payload = {
         "parent": {"database_id": cfg.get("NOTION_MONTHLY_POSTS_DS")},
         "properties": properties,
-        "children": _markdown_to_notion_blocks(article_body),
+        "children": blocks[:100],
     }
     resp = requests.post(f"{cfg.NOTION_BASE}/pages", headers=_notion_headers(), json=payload, timeout=30)
     _raise_for(resp)
     page = resp.json()
+    if len(blocks) > 100:
+        _notion_append_blocks(page["id"], blocks[100:])
     return {"page_id": page["id"], "url": page["url"]}
 
 

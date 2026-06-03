@@ -6,6 +6,7 @@ four-phase performance review workflow.
 from __future__ import annotations
 import json
 import os
+import time
 from typing import Any
 
 import anthropic
@@ -263,6 +264,23 @@ def _dispatch(tool_name: str, tool_input: dict) -> Any:
         return {"error": str(exc)}
 
 
+def _create_message_with_retry(client, **kwargs):
+    """Call client.messages.create with exponential backoff on rate-limit errors."""
+    delays = [10, 30, 60, 120]
+    for attempt, delay in enumerate(delays + [None]):
+        try:
+            return client.messages.create(**kwargs)
+        except anthropic.RateLimitError:
+            if delay is None:
+                raise
+            time.sleep(delay)
+        except anthropic.APIStatusError as exc:
+            if exc.status_code == 429 and delay is not None:
+                time.sleep(delay)
+            else:
+                raise
+
+
 # ── Phase detection ───────────────────────────────────────────────────────────
 
 TOOL_PHASE_MAP = {
@@ -301,7 +319,8 @@ def _loop(
     while True:
         on_event({"type": "thinking"})
 
-        response = client.messages.create(
+        response = _create_message_with_retry(
+            client,
             model=MODEL,
             max_tokens=MAX_TOKENS,
             system=SYSTEM_PROMPT,
@@ -375,7 +394,8 @@ def _loop(
                     "Please take this into account and adjust your next action accordingly."
                 )})
                 on_event({"type": "thinking"})
-                rethink = client.messages.create(
+                rethink = _create_message_with_retry(
+                    client,
                     model=MODEL,
                     max_tokens=MAX_TOKENS,
                     system=SYSTEM_PROMPT,
