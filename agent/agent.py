@@ -17,6 +17,9 @@ from .tools import (
     notion_create_article_page,
     notion_search_performer,
     notion_list_performers_in_icpdb,
+    notion_create_performer,
+    notion_list_shows,
+    notion_search_show,
     webflow_find_performers,
     webflow_create_blog_draft,
     generate_images,
@@ -84,10 +87,71 @@ TOOLS: list[dict] = [
         },
     },
     {
+        "name": "request_performer_review",
+        "description": (
+            "After completing ICPDB matching, call this with any performers found in research "
+            "who are NOT in the ICPDB. The user will review each one and decide to Add or Skip. "
+            "Returns a decisions list. Only call if there are unmatched performers."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "unmatched_performers": {
+                    "type": "array",
+                    "description": "Performers not found in the ICPDB.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "instagram": {"type": "string", "description": "Handle without @, if known."},
+                            "context": {"type": "string", "description": "Where they appeared (show/venue)."},
+                        },
+                        "required": ["name"],
+                    },
+                },
+            },
+            "required": ["unmatched_performers"],
+        },
+    },
+    {
+        "name": "notion_create_performer",
+        "description": "Create a new performer entry in the ICPDB. Only call after user approved adding them via request_performer_review.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Performer's full name."},
+                "instagram": {"type": "string", "description": "Instagram handle (without @)."},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "notion_list_shows",
+        "description": "Return shows from the Shows database. Use in Phase 2 to match shows mentioned in research.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "default": 200},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "notion_search_show",
+        "description": "Search the Shows database for a specific show by name.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Show name to search for."},
+            },
+            "required": ["name"],
+        },
+    },
+    {
         "name": "notion_create_article_page",
         "description": (
             "Create the finished monthly article as a new page in the 'Monthly performance posts' "
-            "Notion database. Links the article to matched ICPDB performer pages."
+            "Notion database. Links the article to matched ICPDB performer pages and show pages."
         ),
         "input_schema": {
             "type": "object",
@@ -97,7 +161,12 @@ TOOLS: list[dict] = [
                 "performer_page_ids": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "List of Notion page IDs for performers mentioned in the article.",
+                    "description": "Notion page IDs for performers mentioned in the article.",
+                },
+                "show_page_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Notion page IDs for shows mentioned in the article.",
                 },
             },
             "required": ["month_label", "article_body", "performer_page_ids"],
@@ -124,9 +193,8 @@ TOOLS: list[dict] = [
     {
         "name": "generate_images",
         "description": (
-            "Generate the Instagram Story (1080×1920) and article header (1500×844) images "
-            "using performer photos from the Notion ICPDB. Uploads the header to Webflow Assets. "
-            "Call this in Phase 3b, after performer matching and before creating the Webflow draft."
+            "Generate the Instagram Story (1080x1920) and article header (1500x844) images "
+            "using performer photos from the Notion ICPDB. Uploads the header to Webflow Assets."
         ),
         "input_schema": {
             "type": "object",
@@ -135,7 +203,7 @@ TOOLS: list[dict] = [
                 "performer_page_ids": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Notion page IDs for the matched performers (up to 16 used).",
+                    "description": "Notion page IDs for matched performers (up to 16).",
                 },
             },
             "required": ["month_label", "performer_page_ids"],
@@ -144,24 +212,23 @@ TOOLS: list[dict] = [
     {
         "name": "webflow_create_blog_draft",
         "description": (
-            "Create a draft Blog Post in Webflow CMS with the article content. "
-            "The post is saved as isDraft=true so it must be reviewed before publishing."
+            "Create a draft Blog Post in Webflow CMS. Saved as isDraft=true for review."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "title": {"type": "string"},
-                "slug": {"type": "string", "description": "URL-safe slug, e.g. 'june-2026-contortion-roundup'"},
+                "slug": {"type": "string", "description": "URL-safe slug."},
                 "description": {"type": "string", "description": "One-sentence meta description."},
-                "body_html": {"type": "string", "description": "Article body as HTML (no inline styles)."},
+                "body_html": {"type": "string", "description": "Article body as HTML."},
                 "featured_performer_ids": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Webflow item IDs for the Featured Performers multi-reference field.",
+                    "description": "Webflow item IDs for Featured Performers.",
                 },
                 "hero_image_asset_id": {
                     "type": "string",
-                    "description": "Webflow asset ID for the hero/header image (from generate_images).",
+                    "description": "Webflow asset ID for the hero image.",
                 },
             },
             "required": ["title", "slug", "description", "body_html"],
@@ -176,6 +243,9 @@ TOOL_FUNCTIONS = {
     "notion_create_research_page": notion_create_research_page,
     "notion_list_performers_in_icpdb": notion_list_performers_in_icpdb,
     "notion_search_performer": notion_search_performer,
+    "notion_create_performer": notion_create_performer,
+    "notion_list_shows": notion_list_shows,
+    "notion_search_show": notion_search_show,
     "notion_create_article_page": notion_create_article_page,
     "generate_images": generate_images,
     "webflow_find_performers": webflow_find_performers,
@@ -196,18 +266,23 @@ def _dispatch(tool_name: str, tool_input: dict) -> Any:
 # ── Phase detection ───────────────────────────────────────────────────────────
 
 TOOL_PHASE_MAP = {
-    "web_search":                    (1, "Research"),
-    "notion_create_research_page":   (1, "Research"),
+    "web_search":                      (1, "Research"),
+    "notion_create_research_page":     (1, "Research"),
     "notion_list_performers_in_icpdb": (2, "Performer Matching"),
-    "notion_search_performer":       (2, "Performer Matching"),
-    "generate_images":               (3, "Image Generation"),
-    "notion_create_article_page":    (4, "Writing Article"),
-    "webflow_find_performers":       (5, "Publishing to Webflow"),
-    "webflow_create_blog_draft":     (5, "Publishing to Webflow"),
+    "notion_search_performer":         (2, "Performer Matching"),
+    "request_performer_review":        (2, "Performer Matching"),
+    "notion_create_performer":         (2, "Performer Matching"),
+    "notion_list_shows":               (2, "Performer Matching"),
+    "notion_search_show":              (2, "Performer Matching"),
+    "generate_images":                 (3, "Image Generation"),
+    "notion_create_article_page":      (4, "Writing Article"),
+    "webflow_find_performers":         (5, "Publishing to Webflow"),
+    "webflow_create_blog_draft":       (5, "Publishing to Webflow"),
 }
 
-_NOOP_EVENT    = lambda event: None
-_NOOP_PAUSE    = lambda: None
+_NOOP_EVENT  = lambda event: None
+_NOOP_PAUSE  = lambda: None
+_NOOP_REVIEW = lambda performers: {"decisions": [{"name": p["name"], "action": "skip"} for p in performers]}
 
 
 # ── Core loop (shared by CLI and dashboard) ───────────────────────────────────
@@ -217,6 +292,7 @@ def _loop(
     messages: list[dict],
     on_event,
     check_pause,
+    get_performer_review,
     verbose: bool,
 ) -> str:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
@@ -273,6 +349,24 @@ def _loop(
             if verbose:
                 print(f"\n🔧 {tool_name}: {json.dumps(tool_input)[:200]}")
 
+            # ── Special: performer review blocks until user responds ──────
+            if tool_name == "request_performer_review":
+                performers = tool_input.get("unmatched_performers", [])
+                on_event({"type": "performer_review", "performers": performers})
+                result = get_performer_review(performers)  # blocks
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": block.id,
+                    "content":     json.dumps(result),
+                })
+                on_event({
+                    "type":   "tool_result",
+                    "tool":   tool_name,
+                    "result": json.dumps(result)[:500],
+                    "ok":     True,
+                })
+                continue
+
             # Check for pause / interject before running the tool
             interject = check_pause()
             if interject:
@@ -281,7 +375,6 @@ def _loop(
                     "Please take this into account and adjust your next action accordingly."
                 )})
                 on_event({"type": "thinking"})
-                # Re-ask the model to decide what to do with the interjection
                 rethink = client.messages.create(
                     model=MODEL,
                     max_tokens=MAX_TOKENS,
@@ -296,7 +389,6 @@ def _loop(
                     )
                     on_event({"type": "summary", "text": final_text})
                     return final_text
-                # Continue outer loop to process new tool calls
                 break
 
             result = _dispatch(tool_name, tool_input)
@@ -331,15 +423,16 @@ def run(month_label: str, verbose: bool = True) -> str:
     messages = [{"role": "user", "content": phase_prompt(month_label)}]
     if verbose:
         print(f"\n🤸 Starting performance review agent for {month_label}\n{'─'*60}")
-    return _loop(month_label, messages, _NOOP_EVENT, _NOOP_PAUSE, verbose)
+    return _loop(month_label, messages, _NOOP_EVENT, _NOOP_PAUSE, _NOOP_REVIEW, verbose)
 
 
 def run_with_callbacks(
     month_label: str,
     on_event,
     check_pause,
+    get_performer_review,
 ) -> str:
     """Dashboard entry point — streams events via callbacks."""
     messages = [{"role": "user", "content": phase_prompt(month_label)}]
     on_event({"type": "phase", "phase": 1, "label": "Research"})
-    return _loop(month_label, messages, on_event, check_pause, verbose=False)
+    return _loop(month_label, messages, on_event, check_pause, get_performer_review, verbose=False)

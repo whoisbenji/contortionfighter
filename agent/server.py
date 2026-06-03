@@ -4,7 +4,7 @@ WebSocket server for the performance review agent dashboard.
 Run with:
     uvicorn agent.server:app --reload --port 8765
 
-Then open agent/dashboard.html in a browser.
+Then open http://localhost:8765 in a browser.
 """
 
 from __future__ import annotations
@@ -29,9 +29,8 @@ from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from pathlib import Path
 
+from . import config as cfg
 from .agent import run_with_callbacks
 
 app = FastAPI(title="Contortion Space Agent Dashboard")
@@ -42,33 +41,27 @@ app = FastAPI(title="Contortion Space Agent Dashboard")
 class AgentSession:
     """
     Manages a single agent run connected to one WebSocket client.
-    Uses three thread-safe queues:
-      - outbox:   agent  → frontend  (events)
-      - inbox:    frontend → agent   (interject messages)
-      - pause_flag: set to True to request a pause between tool calls
+    Queues:
+      outbox:        agent → frontend  (events)
+      inbox:         frontend → agent  (interject / resume messages)
+      review_inbox:  frontend → agent  (performer review decisions)
     """
 
     def __init__(self, ws: WebSocket):
         self.ws = ws
-        self.outbox: queue.Queue[dict | None] = queue.Queue()
-        self.inbox:  queue.Queue[str]         = queue.Queue()
+        self.outbox: queue.Queue[dict | None]  = queue.Queue()
+        self.inbox:  queue.Queue[str]          = queue.Queue()
+        self.review_inbox: queue.Queue[dict]   = queue.Queue()
         self.pause_requested = threading.Event()
-        self.thread: threading.Thread | None = None
+        self.thread: threading.Thread | None   = None
 
     # ── Callbacks passed into the agent ──────────────────────────────────
 
     def on_event(self, event: dict) -> None:
-        """Called from agent thread — enqueue for async send."""
         self.outbox.put(event)
 
     def check_pause(self) -> str | None:
-        """
-        Called from agent thread between each tool call.
-        Returns an interject message if one was submitted, else None.
-        Blocks until user sends a resume if pause was requested.
-        """
         if not self.pause_requested.is_set():
-            # Check for queued interject without blocking
             try:
                 msg = self.inbox.get_nowait()
                 self.outbox.put({"type": "injected", "message": msg})
@@ -76,14 +69,18 @@ class AgentSession:
             except queue.Empty:
                 return None
 
-        # Pause was requested — notify frontend and wait
         self.outbox.put({"type": "paused", "message": "Agent paused — waiting for your input."})
         self.pause_requested.clear()
-
-        # Block until user sends something
-        msg = self.inbox.get()   # blocks agent thread
+        msg = self.inbox.get()
         self.outbox.put({"type": "resumed", "message": msg})
         return msg
+
+    def get_performer_review(self, performers: list[dict]) -> dict:
+        """Blocks the agent thread until the user submits performer decisions."""
+        # The performer_review event was already emitted by the agent loop.
+        # Wait for the user's response from the frontend.
+        decisions = self.review_inbox.get()  # blocks
+        return decisions
 
     # ── Start agent in background thread ─────────────────────────────────
 
@@ -94,11 +91,12 @@ class AgentSession:
                     month_label=month_label,
                     on_event=self.on_event,
                     check_pause=self.check_pause,
+                    get_performer_review=self.get_performer_review,
                 )
             except Exception as exc:
                 self.outbox.put({"type": "error", "message": str(exc)})
             finally:
-                self.outbox.put(None)  # sentinel: stream finished
+                self.outbox.put(None)
 
         self.thread = threading.Thread(target=_run, daemon=True)
         self.thread.start()
@@ -113,7 +111,6 @@ async def websocket_endpoint(ws: WebSocket):
     loop = asyncio.get_event_loop()
 
     try:
-        # First message must be a "start" command
         raw = await ws.receive_text()
         msg = json.loads(raw)
 
@@ -126,15 +123,17 @@ async def websocket_endpoint(ws: WebSocket):
             await ws.send_text(json.dumps({"type": "error", "message": "month is required"}))
             return
 
+        # Apply admin-panel config overrides for this session
+        db_config = msg.get("db_config", {})
+        cfg.set_overrides(db_config)
+
         session = AgentSession(ws)
         session.start(month_label)
 
         await ws.send_text(json.dumps({"type": "started", "month": month_label}))
 
-        # Pump outbox → WebSocket and receive control messages concurrently
         async def _pump_outbox():
             while True:
-                # Poll outbox without blocking the event loop
                 event = await loop.run_in_executor(None, session.outbox.get)
                 if event is None:
                     await ws.send_text(json.dumps({"type": "done"}))
@@ -152,11 +151,13 @@ async def websocket_endpoint(ws: WebSocket):
                     elif ctrl_type == "pause":
                         session.pause_requested.set()
                     elif ctrl_type == "resume":
-                        # Put an empty resume to unblock if waiting
                         try:
                             session.inbox.put_nowait(ctrl.get("message", ""))
                         except queue.Full:
                             pass
+                    elif ctrl_type == "performer_decisions":
+                        # decisions: [{name, action: "add"|"skip", instagram: "..."}]
+                        session.review_inbox.put({"decisions": ctrl.get("decisions", [])})
                 except WebSocketDisconnect:
                     break
 

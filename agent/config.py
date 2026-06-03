@@ -7,10 +7,11 @@ All IDs were read directly from the live workspace / site.
 NOTION_VERSION = "2022-06-28"
 NOTION_BASE = "https://api.notion.com/v1"
 
-# Collection (data-source) IDs
-NOTION_MONTHLY_POSTS_DS   = "23e3c48a-f297-806a-b2ed-000b34c63f74"   # Monthly performance posts
-NOTION_MONTHLY_RESEARCH_DS = "3293c48a-f297-8010-b5fc-000b5f289537"  # Monthly research
-NOTION_ICPDB_DS            = "3253c48a-f297-80c5-9bdd-000bb269690f"   # ICPDB performers
+# Collection (data-source) IDs — defaults, overridable via admin panel
+NOTION_MONTHLY_POSTS_DS    = "23e3c48a-f297-80a6-9e58-f787056ac2cb"   # Monthly performance posts
+NOTION_MONTHLY_RESEARCH_DS = "3293c48a-f297-8058-b4dd-f0c11fe818a8"   # Monthly research
+NOTION_ICPDB_DS            = "3253c48a-f297-8053-899f-d014af1786ab"   # ICPDB performers
+NOTION_SHOWS_DS            = "3253c48a-f297-805e-9f63-e7672d0ecb35"   # Shows
 
 # ── Webflow ──────────────────────────────────────────────────────────────────
 WEBFLOW_BASE = "https://api.webflow.com/v2"
@@ -29,3 +30,17 @@ WF_FIELD_FEAT_PERFORMERS = "featured-performers"
 
 # Webflow Blog Post type option IDs
 WF_POST_TYPE_ARTICLE     = "9d81099cc178be8bc8adfce88dcb71d2"
+
+# ── Runtime overrides (set by admin panel via server) ────────────────────────
+_overrides: dict = {}
+
+
+def set_overrides(d: dict) -> None:
+    """Apply admin-panel DB ID overrides for this session."""
+    _overrides.clear()
+    _overrides.update({k: v for k, v in d.items() if v})
+
+
+def get(key: str) -> str:
+    """Return the active value for a config key (override wins)."""
+    return _overrides.get(key, globals()[key])
