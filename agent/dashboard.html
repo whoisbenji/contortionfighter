@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Contortion Space · Performance Review Agent</title>
+<style>
+  /* ── Reset & base ─────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #090909;
+    --bg2:       #0f0f14;
+    --bg3:       #161620;
+    --border:    #2a2a3a;
+    --purple:    #9b4dff;
+    --purple-dim:#5c2da8;
+    --cyan:      #00e5cc;
+    --red:       #ff4560;
+    --yellow:    #ffd166;
+    --text:      #e0dff0;
+    --muted:     #5a586e;
+    --font-mono: 'JetBrains Mono', 'Fira Mono', 'Consolas', monospace;
+    --font-ui:   'Inter', 'Segoe UI', system-ui, sans-serif;
+    --radius:    8px;
+    --glow:      0 0 24px rgba(155, 77, 255, 0.25);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── Layout ───────────────────────────────────────── */
+  .app {
+    display: grid;
+    grid-template-rows: 56px 1fr;
+    grid-template-columns: 260px 1fr;
+    grid-template-areas:
+      "header header"
+      "sidebar main";
+    height: 100vh;
+  }
+
+  /* ── Header ───────────────────────────────────────── */
+  .header {
+    grid-area: header;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 24px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+  }
+  .header .logo {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+  .header .logo span { color: var(--purple); }
+  .header .badge {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    background: var(--purple-dim);
+    color: var(--purple);
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  #status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  #status-dot.running { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+  #status-dot.paused  { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+  #status-dot.error   { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  #status-dot.done    { background: #4dff91; box-shadow: 0 0 8px #4dff91; }
+  #status-label { font-size: 12px; color: var(--muted); }
+
+  /* ── Sidebar ──────────────────────────────────────── */
+  .sidebar {
+    grid-area: sidebar;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 20px 16px;
+    gap: 24px;
+    overflow-y: auto;
+  }
+
+  .sidebar-section { display: flex; flex-direction: column; gap: 10px; }
+  .sidebar-label {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  /* Month input */
+  .month-input {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 15px;
+    padding: 10px 12px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .month-input:focus {
+    border-color: var(--purple);
+    box-shadow: 0 0 0 3px rgba(155,77,255,0.15);
+  }
+
+  /* Buttons */
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px 16px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+    width: 100%;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary {
+    background: var(--purple);
+    color: #fff;
+    box-shadow: var(--glow);
+  }
+  .btn-primary:hover:not(:disabled) { filter: brightness(1.15); }
+  .btn-pause {
+    background: transparent;
+    border: 1px solid var(--yellow);
+    color: var(--yellow);
+  }
+  .btn-pause:hover:not(:disabled) { background: rgba(255,209,102,0.08); }
+  .btn-danger {
+    background: transparent;
+    border: 1px solid var(--red);
+    color: var(--red);
+  }
+
+  /* Phase tracker */
+  .phases { display: flex; flex-direction: column; gap: 4px; }
+  .phase-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    transition: background 0.2s;
+  }
+  .phase-item.active  { background: rgba(155,77,255,0.12); }
+  .phase-item.done    { opacity: 0.7; }
+  .phase-dot {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+    transition: all 0.3s;
+  }
+  .phase-item.active  .phase-dot { border-color: var(--purple); color: var(--purple); background: rgba(155,77,255,0.15); }
+  .phase-item.active  .phase-dot::after { content: ''; display:block; width:6px;height:6px;border-radius:50%;background:var(--purple); animation: pulse 1s infinite; }
+  .phase-item.done    .phase-dot { border-color: #4dff91; background: rgba(77,255,145,0.1); }
+  .phase-item.done    .phase-dot::after { content: '✓'; color: #4dff91; }
+  .phase-item.error   .phase-dot { border-color: var(--red); background: rgba(255,69,96,0.1); }
+  .phase-item.error   .phase-dot::after { content: '✕'; color: var(--red); }
+  .phase-name { font-size: 12px; font-weight: 500; color: var(--muted); transition: color 0.2s; }
+  .phase-item.active .phase-name { color: var(--text); }
+  .phase-item.done   .phase-name { color: var(--text); }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.4); opacity: 0.6; }
+  }
+
+  /* ── Main panel ───────────────────────────────────── */
+  .main {
+    grid-area: main;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Activity feed */
+  .feed {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    scroll-behavior: smooth;
+  }
+  .feed::-webkit-scrollbar { width: 6px; }
+  .feed::-webkit-scrollbar-track { background: transparent; }
+  .feed::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .entry {
+    display: flex;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    animation: fadeSlideIn 0.2s ease;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .entry-icon { flex-shrink: 0; font-size: 14px; line-height: 1.6; width: 20px; text-align: center; }
+
+  .entry-body { flex: 1; min-width: 0; }
+  .entry-tool { font-weight: 700; margin-bottom: 2px; }
+  .entry-text { color: var(--muted); word-break: break-word; white-space: pre-wrap; }
+  .entry-text.expandable { cursor: pointer; }
+  .entry-text.expandable:hover { color: var(--text); }
+  .entry-text.collapsed { max-height: 3em; overflow: hidden; }
+
+  .entry.thinking { background: rgba(255,255,255,0.02); }
+  .entry.thinking .entry-text { color: var(--muted); font-style: italic; }
+
+  .entry.phase-change { background: rgba(155,77,255,0.08); border-color: var(--purple-dim); }
+  .entry.phase-change .entry-tool { color: var(--purple); font-size: 13px; }
+
+  .entry.tool-call  { background: rgba(0,229,204,0.04); border-color: rgba(0,229,204,0.1); }
+  .entry.tool-call  .entry-tool { color: var(--cyan); }
+
+  .entry.tool-result.ok  { background: rgba(77,255,145,0.03); }
+  .entry.tool-result.ok  .entry-tool { color: #4dff91; }
+  .entry.tool-result.err { background: rgba(255,69,96,0.05); border-color: rgba(255,69,96,0.2); }
+  .entry.tool-result.err .entry-tool { color: var(--red); }
+
+  .entry.injected  { background: rgba(255,209,102,0.06); border-color: rgba(255,209,102,0.2); }
+  .entry.injected  .entry-tool { color: var(--yellow); }
+
+  .entry.paused    { background: rgba(255,209,102,0.08); border-color: var(--yellow); }
+  .entry.paused    .entry-tool { color: var(--yellow); }
+
+  .entry.resumed   { background: rgba(77,255,145,0.05); }
+  .entry.resumed   .entry-tool { color: #4dff91; }
+
+  .entry.summary {
+    background: var(--bg3);
+    border-color: var(--purple-dim);
+    font-family: var(--font-ui);
+    font-size: 13px;
+  }
+  .entry.summary .entry-tool { color: var(--purple); font-size: 14px; }
+  .entry.summary .entry-text {
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .entry.error-entry { background: rgba(255,69,96,0.08); border-color: var(--red); }
+  .entry.error-entry .entry-tool { color: var(--red); }
+
+  /* Thinking dots */
+  .dots::after {
+    content: '...';
+    animation: dots 1.2s steps(4, end) infinite;
+  }
+  @keyframes dots {
+    0%   { content: ''; }
+    25%  { content: '.'; }
+    50%  { content: '..'; }
+    75%  { content: '...'; }
+    100% { content: ''; }
+  }
+
+  /* ── Interject bar ────────────────────────────────── */
+  .interject-bar {
+    border-top: 1px solid var(--border);
+    background: var(--bg2);
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .interject-hint {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+  }
+  .interject-hint.paused-hint { color: var(--yellow); }
+
+  .interject-row { display: flex; gap: 10px; }
+
+  .interject-input {
+    flex: 1;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    resize: none;
+    min-height: 42px;
+    max-height: 120px;
+  }
+  .interject-input:focus { border-color: var(--yellow); }
+  .interject-input.paused { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(255,209,102,0.1); }
+  .interject-input::placeholder { color: var(--muted); }
+
+  .btn-send {
+    background: var(--yellow);
+    color: #0a0008;
+    font-weight: 700;
+    border: none;
+    border-radius: var(--radius);
+    padding: 10px 18px;
+    cursor: pointer;
+    font-size: 13px;
+    white-space: nowrap;
+    transition: filter 0.15s;
+    flex-shrink: 0;
+  }
+  .btn-send:hover { filter: brightness(1.1); }
+  .btn-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Empty state ──────────────────────────────────── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    color: var(--muted);
+  }
+  .empty-state .big { font-size: 48px; }
+  .empty-state p { font-size: 13px; text-align: center; max-width: 280px; line-height: 1.7; }
+
+  /* ── Misc ─────────────────────────────────────────── */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">Contortion <span>Space</span></div>
+    <div class="badge">Agent</div>
+    <div class="header-right">
+      <div id="status-dot"></div>
+      <span id="status-label">Idle</span>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Month</div>
+      <input
+        type="text"
+        id="month-input"
+        class="month-input"
+        placeholder="e.g. June 2026"
+        value=""
+      />
+    </div>
+
+    <div class="sidebar-section">
+      <button id="run-btn" class="btn btn-primary">
+        ▶ &nbsp; Run Agent
+      </button>
+      <button id="pause-btn" class="btn btn-pause" disabled>
+        ⏸ &nbsp; Request Pause
+      </button>
+    </div>
+
+    <hr class="divider" />
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Progress</div>
+      <div class="phases" id="phase-list">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Main feed -->
+  <main class="main">
+    <div class="feed" id="feed">
+      <div class="empty-state" id="empty-state">
+        <div class="big">🤸</div>
+        <p>Enter a month and click <strong>Run Agent</strong> to generate your monthly performance review.</p>
+      </div>
+    </div>
+
+    <!-- Interject bar (always visible when running) -->
+    <div class="interject-bar" id="interject-bar" style="display:none">
+      <div class="interject-hint" id="interject-hint">
+        Type a correction or instruction — it will be injected into the agent's context on the next tool call.
+      </div>
+      <div class="interject-row">
+        <textarea
+          id="interject-input"
+          class="interject-input"
+          rows="1"
+          placeholder="Add a note or correction for the agent…"
+        ></textarea>
+        <button id="send-btn" class="btn-send">Send</button>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const PHASES = [
+  { id: 1, label: "Research" },
+  { id: 2, label: "Performer Matching" },
+  { id: 3, label: "Image Generation" },
+  { id: 4, label: "Writing Article" },
+  { id: 5, label: "Publishing to Webflow" },
+];
+
+let ws = null;
+let agentRunning = false;
+let agentPaused  = false;
+let currentPhase = 0;
+
+// ── DOM refs ───────────────────────────────────────────────────────────────
+const monthInput     = document.getElementById('month-input');
+const runBtn         = document.getElementById('run-btn');
+const pauseBtn       = document.getElementById('pause-btn');
+const feed           = document.getElementById('feed');
+const emptyState     = document.getElementById('empty-state');
+const interjectBar   = document.getElementById('interject-bar');
+const interjectInput = document.getElementById('interject-input');
+const interjectHint  = document.getElementById('interject-hint');
+const sendBtn        = document.getElementById('send-btn');
+const statusDot      = document.getElementById('status-dot');
+const statusLabel    = document.getElementById('status-label');
+const phaseList      = document.getElementById('phase-list');
+
+// ── Initialise phase list ──────────────────────────────────────────────────
+function buildPhaseList() {
+  phaseList.innerHTML = '';
+  PHASES.forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'phase-item';
+    el.id = `phase-${p.id}`;
+    el.innerHTML = `<div class="phase-dot"></div><div class="phase-name">${p.label}</div>`;
+    phaseList.appendChild(el);
+  });
+}
+buildPhaseList();
+
+// Pre-fill current month
+const now = new Date();
+monthInput.value = now.toLocaleString('default', { month: 'long' }) + ' ' + now.getFullYear();
+
+// ── Status helpers ─────────────────────────────────────────────────────────
+function setStatus(state, label) {
+  statusDot.className = state;
+  statusLabel.textContent = label;
+}
+
+function setPhase(phaseId) {
+  if (phaseId === currentPhase) return;
+  // Mark previous done
+  if (currentPhase > 0) {
+    const prev = document.getElementById(`phase-${currentPhase}`);
+    if (prev) prev.className = 'phase-item done';
+  }
+  currentPhase = phaseId;
+  const el = document.getElementById(`phase-${phaseId}`);
+  if (el) el.className = 'phase-item active';
+}
+
+function markAllDone() {
+  PHASES.forEach(p => {
+    const el = document.getElementById(`phase-${p.id}`);
+    if (el && !el.classList.contains('error')) el.className = 'phase-item done';
+  });
+}
+
+// ── Feed helpers ───────────────────────────────────────────────────────────
+function addEntry(cls, icon, title, body, collapsible = false) {
+  emptyState && (emptyState.style.display = 'none');
+
+  const entry = document.createElement('div');
+  entry.className = `entry ${cls}`;
+
+  const bodyHtml = collapsible
+    ? `<div class="entry-text collapsed expandable" onclick="this.classList.toggle('collapsed')">${esc(body)}</div>`
+    : `<div class="entry-text">${esc(body)}</div>`;
+
+  entry.innerHTML = `
+    <div class="entry-icon">${icon}</div>
+    <div class="entry-body">
+      ${title ? `<div class="entry-tool">${esc(title)}</div>` : ''}
+      ${bodyHtml}
+    </div>`;
+
+  // Remove old thinking entry if new real entry arrives
+  const last = feed.lastElementChild;
+  if (last && last.classList.contains('thinking')) last.remove();
+
+  feed.appendChild(entry);
+  feed.scrollTop = feed.scrollHeight;
+  return entry;
+}
+
+function addThinking() {
+  const last = feed.lastElementChild;
+  if (last && last.classList.contains('thinking')) return; // already showing
+  const entry = document.createElement('div');
+  entry.className = 'entry thinking';
+  entry.innerHTML = `
+    <div class="entry-icon">🧠</div>
+    <div class="entry-body">
+      <div class="entry-text"><span class="dots">Thinking</span></div>
+    </div>`;
+  feed.appendChild(entry);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function esc(str) {
+  if (typeof str !== 'string') str = JSON.stringify(str, null, 2);
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+const TOOL_ICONS = {
+  web_search:                      '🔍',
+  notion_create_research_page:     '📋',
+  notion_list_performers_in_icpdb: '🗂',
+  notion_search_performer:         '🔎',
+  notion_create_article_page:      '✍️',
+  generate_images:                 '🖼',
+  webflow_find_performers:         '🔗',
+  webflow_create_blog_draft:       '🚀',
+};
+
+// ── WebSocket message handler ──────────────────────────────────────────────
+function handleMessage(data) {
+  switch (data.type) {
+
+    case 'started':
+      addEntry('phase-change', '▶', `Started`, `Running agent for ${data.month}`);
+      break;
+
+    case 'thinking':
+      addThinking();
+      break;
+
+    case 'phase':
+      setPhase(data.phase);
+      addEntry('phase-change', '📍', `Phase ${data.phase}`, data.label);
+      setStatus('running', data.label);
+      break;
+
+    case 'tool_call': {
+      const icon = TOOL_ICONS[data.tool] || '🔧';
+      const inputStr = typeof data.input === 'string'
+        ? data.input
+        : JSON.stringify(data.input, null, 2);
+      addEntry('tool-call', icon, data.tool, inputStr, true);
+      break;
+    }
+
+    case 'tool_result': {
+      const cls = data.ok ? 'tool-result ok' : 'tool-result err';
+      const icon = data.ok ? '✓' : '✕';
+      addEntry(cls, icon, data.tool + ' → result', data.result, true);
+      break;
+    }
+
+    case 'paused':
+      agentPaused = true;
+      setStatus('paused', 'Paused');
+      addEntry('paused', '⏸', 'Agent Paused', data.message);
+      interjectHint.textContent = 'Agent is paused. Type your correction and click Send to resume.';
+      interjectHint.className = 'interject-hint paused-hint';
+      interjectInput.className = 'interject-input paused';
+      interjectInput.focus();
+      sendBtn.textContent = 'Resume';
+      pauseBtn.disabled = true;
+      break;
+
+    case 'resumed':
+      agentPaused = false;
+      setStatus('running', 'Resuming…');
+      addEntry('resumed', '▶', 'Resumed', data.message ? `With note: "${data.message}"` : 'Agent resumed.');
+      interjectHint.textContent = 'Type a correction or instruction — it will be injected into the agent\'s context on the next tool call.';
+      interjectHint.className = 'interject-hint';
+      interjectInput.className = 'interject-input';
+      sendBtn.textContent = 'Send';
+      pauseBtn.disabled = false;
+      break;
+
+    case 'injected':
+      addEntry('injected', '💬', 'Your note injected', data.message);
+      break;
+
+    case 'summary':
+      addEntry('summary', '✅', 'Complete', data.text);
+      break;
+
+    case 'done':
+      agentRunning = false;
+      agentPaused  = false;
+      markAllDone();
+      setStatus('done', 'Done');
+      runBtn.disabled = false;
+      pauseBtn.disabled = true;
+      interjectBar.style.display = 'none';
+      addEntry('phase-change', '🎉', 'All done', 'Review your draft in Webflow and check the output folder for images.');
+      break;
+
+    case 'error':
+      setStatus('error', 'Error');
+      addEntry('error-entry', '⚠', 'Error', data.message);
+      agentRunning = false;
+      runBtn.disabled = false;
+      pauseBtn.disabled = true;
+      break;
+  }
+}
+
+// ── Run agent ──────────────────────────────────────────────────────────────
+runBtn.addEventListener('click', () => {
+  const month = monthInput.value.trim();
+  if (!month) { monthInput.focus(); return; }
+
+  // Reset UI
+  feed.innerHTML = '';
+  buildPhaseList();
+  currentPhase = 0;
+  agentRunning = true;
+  agentPaused  = false;
+
+  runBtn.disabled = true;
+  pauseBtn.disabled = false;
+  interjectBar.style.display = '';
+  interjectInput.value = '';
+  interjectInput.className = 'interject-input';
+  sendBtn.textContent = 'Send';
+  setStatus('running', 'Connecting…');
+
+  // Connect WebSocket
+  const wsUrl = `ws://${location.host}/ws`;
+  ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    setStatus('running', 'Starting…');
+    ws.send(JSON.stringify({ type: 'start', month }));
+  };
+
+  ws.onmessage = e => {
+    try {
+      const data = JSON.parse(e.data);
+      handleMessage(data);
+    } catch {}
+  };
+
+  ws.onerror = () => {
+    setStatus('error', 'Connection error');
+    addEntry('error-entry', '⚠', 'WebSocket Error',
+      'Could not connect to the agent server.\nMake sure you started it with:\n\n  uvicorn agent.server:app --port 8765');
+    runBtn.disabled = false;
+    pauseBtn.disabled = true;
+  };
+
+  ws.onclose = () => {
+    if (agentRunning) {
+      setStatus('error', 'Disconnected');
+      addEntry('error-entry', '⚠', 'Disconnected', 'The server closed the connection unexpectedly.');
+      agentRunning = false;
+      runBtn.disabled = false;
+      pauseBtn.disabled = true;
+    }
+  };
+});
+
+// ── Pause ──────────────────────────────────────────────────────────────────
+pauseBtn.addEventListener('click', () => {
+  if (!ws || !agentRunning) return;
+  ws.send(JSON.stringify({ type: 'pause' }));
+  addEntry('injected', '⏸', 'Pause requested', 'Agent will pause before the next tool call.');
+  pauseBtn.disabled = true;
+});
+
+// ── Send interject / resume ────────────────────────────────────────────────
+function sendInterject() {
+  const msg = interjectInput.value.trim();
+  if (!ws) return;
+
+  if (agentPaused) {
+    ws.send(JSON.stringify({ type: 'resume', message: msg }));
+  } else {
+    if (!msg) return;
+    ws.send(JSON.stringify({ type: 'interject', message: msg }));
+    addEntry('injected', '💬', 'Note queued', msg);
+  }
+  interjectInput.value = '';
+}
+
+sendBtn.addEventListener('click', sendInterject);
+
+interjectInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    sendInterject();
+  }
+});
+
+// Auto-resize textarea
+interjectInput.addEventListener('input', () => {
+  interjectInput.style.height = 'auto';
+  interjectInput.style.height = Math.min(interjectInput.scrollHeight, 120) + 'px';
+});
+</script>
+</body>
+</html>

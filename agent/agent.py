@@ -193,21 +193,38 @@ def _dispatch(tool_name: str, tool_input: dict) -> Any:
         return {"error": str(exc)}
 
 
-# ── Agent loop ────────────────────────────────────────────────────────────────
+# ── Phase detection ───────────────────────────────────────────────────────────
 
-def run(month_label: str, verbose: bool = True) -> str:
-    """
-    Run the full four-phase performance review agent for the given month.
-    Returns the final summary text from the model.
-    """
+TOOL_PHASE_MAP = {
+    "web_search":                    (1, "Research"),
+    "notion_create_research_page":   (1, "Research"),
+    "notion_list_performers_in_icpdb": (2, "Performer Matching"),
+    "notion_search_performer":       (2, "Performer Matching"),
+    "generate_images":               (3, "Image Generation"),
+    "notion_create_article_page":    (4, "Writing Article"),
+    "webflow_find_performers":       (5, "Publishing to Webflow"),
+    "webflow_create_blog_draft":     (5, "Publishing to Webflow"),
+}
+
+_NOOP_EVENT    = lambda event: None
+_NOOP_PAUSE    = lambda: None
+
+
+# ── Core loop (shared by CLI and dashboard) ───────────────────────────────────
+
+def _loop(
+    month_label: str,
+    messages: list[dict],
+    on_event,
+    check_pause,
+    verbose: bool,
+) -> str:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-
-    messages: list[dict] = [{"role": "user", "content": phase_prompt(month_label)}]
-
-    if verbose:
-        print(f"\n🤸 Starting performance review agent for {month_label}\n{'─'*60}")
+    current_phase = 0
 
     while True:
+        on_event({"type": "thinking"})
+
         response = client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
@@ -216,15 +233,13 @@ def run(month_label: str, verbose: bool = True) -> str:
             messages=messages,
         )
 
-        # Append assistant response to history
         messages.append({"role": "assistant", "content": response.content})
 
         if response.stop_reason == "end_turn":
-            # Extract the final text block
-            final_text = ""
-            for block in response.content:
-                if hasattr(block, "text"):
-                    final_text += block.text
+            final_text = "".join(
+                block.text for block in response.content if hasattr(block, "text")
+            )
+            on_event({"type": "summary", "text": final_text})
             if verbose:
                 print("\n✅ Agent complete.\n")
                 print(final_text)
@@ -233,32 +248,98 @@ def run(month_label: str, verbose: bool = True) -> str:
         if response.stop_reason != "tool_use":
             break
 
-        # Process all tool calls in this turn
         tool_results = []
         for block in response.content:
             if block.type != "tool_use":
                 continue
-            tool_name = block.name
+
+            tool_name  = block.name
             tool_input = block.input
 
+            # Emit phase change if needed
+            phase_num, phase_label = TOOL_PHASE_MAP.get(tool_name, (current_phase, "Working"))
+            if phase_num != current_phase:
+                current_phase = phase_num
+                on_event({"type": "phase", "phase": phase_num, "label": phase_label})
+
+            # Emit tool_call event
+            on_event({
+                "type":  "tool_call",
+                "tool":  tool_name,
+                "input": {k: (v[:200] + "…" if isinstance(v, str) and len(v) > 200 else v)
+                          for k, v in tool_input.items()},
+            })
+
             if verbose:
-                print(f"\n🔧 Tool: {tool_name}")
-                # Show a brief preview of the input
-                preview = json.dumps(tool_input, ensure_ascii=False)
-                print(f"   Input: {preview[:200]}{'…' if len(preview) > 200 else ''}")
+                print(f"\n🔧 {tool_name}: {json.dumps(tool_input)[:200]}")
+
+            # Check for pause / interject before running the tool
+            interject = check_pause()
+            if interject:
+                messages.append({"role": "user", "content": (
+                    f"[User interjection]: {interject}\n"
+                    "Please take this into account and adjust your next action accordingly."
+                )})
+                on_event({"type": "thinking"})
+                # Re-ask the model to decide what to do with the interjection
+                rethink = client.messages.create(
+                    model=MODEL,
+                    max_tokens=MAX_TOKENS,
+                    system=SYSTEM_PROMPT,
+                    tools=TOOLS,
+                    messages=messages,
+                )
+                messages.append({"role": "assistant", "content": rethink.content})
+                if rethink.stop_reason == "end_turn":
+                    final_text = "".join(
+                        b.text for b in rethink.content if hasattr(b, "text")
+                    )
+                    on_event({"type": "summary", "text": final_text})
+                    return final_text
+                # Continue outer loop to process new tool calls
+                break
 
             result = _dispatch(tool_name, tool_input)
 
-            if verbose:
-                preview = json.dumps(result, ensure_ascii=False)
-                print(f"   Result: {preview[:300]}{'…' if len(preview) > 300 else ''}")
-
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": json.dumps(result),
+            result_preview = json.dumps(result, ensure_ascii=False)
+            on_event({
+                "type":   "tool_result",
+                "tool":   tool_name,
+                "result": result_preview[:500] + ("…" if len(result_preview) > 500 else ""),
+                "ok":     "error" not in result,
             })
 
-        messages.append({"role": "user", "content": tool_results})
+            if verbose:
+                print(f"   → {result_preview[:300]}")
+
+            tool_results.append({
+                "type":        "tool_result",
+                "tool_use_id": block.id,
+                "content":     json.dumps(result),
+            })
+
+        if tool_results:
+            messages.append({"role": "user", "content": tool_results})
 
     return "Agent loop ended unexpectedly."
+
+
+# ── Public entry points ───────────────────────────────────────────────────────
+
+def run(month_label: str, verbose: bool = True) -> str:
+    """CLI entry point — prints progress, no WebSocket."""
+    messages = [{"role": "user", "content": phase_prompt(month_label)}]
+    if verbose:
+        print(f"\n🤸 Starting performance review agent for {month_label}\n{'─'*60}")
+    return _loop(month_label, messages, _NOOP_EVENT, _NOOP_PAUSE, verbose)
+
+
+def run_with_callbacks(
+    month_label: str,
+    on_event,
+    check_pause,
+) -> str:
+    """Dashboard entry point — streams events via callbacks."""
+    messages = [{"role": "user", "content": phase_prompt(month_label)}]
+    on_event({"type": "phase", "phase": 1, "label": "Research"})
+    return _loop(month_label, messages, on_event, check_pause, verbose=False)
