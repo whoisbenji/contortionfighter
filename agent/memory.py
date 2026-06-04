@@ -107,13 +107,12 @@ def get_run(run_id: str) -> dict | None:
 
 
 def image_url(abs_path: str | None) -> str | None:
-    """Convert an absolute output path to a /output/... URL for the dashboard."""
+    """Convert an output path to a /output/... URL for the dashboard."""
     if not abs_path:
         return None
-    p = Path(abs_path)
-    output_root = Path(__file__).parent.parent / "output"
+    output_root = (Path(__file__).parent.parent / "output").resolve()
     try:
-        rel = p.relative_to(output_root)
+        rel = Path(abs_path).resolve().relative_to(output_root)
         return f"/output/{rel.as_posix()}"
     except ValueError:
         return None

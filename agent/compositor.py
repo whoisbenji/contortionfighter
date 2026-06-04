@@ -370,8 +370,8 @@ def generate_and_upload_images(
     """
     if output_dir is None:
         slug = month_label.lower().replace(" ", "-")
-        output_dir = Path("output") / slug
-    output_dir = Path(output_dir)
+        output_dir = Path(__file__).parent.parent / "output" / slug
+    output_dir = Path(output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"  📸 Fetching performer photos from Notion ({len(performer_ids)} performers)…")
