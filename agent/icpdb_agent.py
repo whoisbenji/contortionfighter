@@ -368,6 +368,7 @@ def run_with_callbacks(
     get_update_decisions,
     run_mode: str = "full",
     run_id: str | None = None,
+    prefs: dict | None = None,
 ) -> str:
     """Dashboard entry point — streams events via callbacks."""
     if run_id is None:
@@ -375,7 +376,7 @@ def run_with_callbacks(
 
     on_event({"type": "run_id", "run_id": run_id})
 
-    messages = [{"role": "user", "content": audit_prompt(run_mode)}]
+    messages = [{"role": "user", "content": audit_prompt(run_mode, prefs=prefs)}]
 
     on_event({"type": "phase", "phase": 1, "label": "Audit"})
 

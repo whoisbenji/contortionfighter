@@ -202,6 +202,37 @@ def get_last_icpdb_audit() -> dict | None:
     return None
 
 
+# ── ICPDB user preferences ───────────────────────────────────────────────────
+
+ICPDB_PREFS_FILE = Path(__file__).parent / "icpdb_prefs.json"
+
+_DEFAULT_PREFS: dict = {
+    "priority_fields": [],   # list of field names in priority order
+    "notes": "",             # free-text guidance for the agent
+}
+
+
+def get_icpdb_prefs() -> dict:
+    """Return the stored ICPDB preferences, falling back to defaults."""
+    if ICPDB_PREFS_FILE.exists():
+        try:
+            stored = json.loads(ICPDB_PREFS_FILE.read_text(encoding="utf-8"))
+            return {**_DEFAULT_PREFS, **stored}
+        except Exception:
+            pass
+    return dict(_DEFAULT_PREFS)
+
+
+def save_icpdb_prefs(prefs: dict) -> None:
+    """Persist ICPDB preferences."""
+    current = get_icpdb_prefs()
+    current.update({k: v for k, v in prefs.items() if k in _DEFAULT_PREFS})
+    ICPDB_PREFS_FILE.write_text(
+        json.dumps(current, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
 def image_url(abs_path: str | None) -> str | None:
     """Convert an output path to a /output/... URL for the dashboard."""
     if not abs_path:

@@ -209,8 +209,9 @@ async def save_feedback(request: Request):
 # ── ICPDBSession ──────────────────────────────────────────────────────────────
 
 class ICPDBSession:
-    def __init__(self, ws: WebSocket):
+    def __init__(self, ws: WebSocket, prefs: dict | None = None):
         self.ws = ws
+        self.prefs = prefs or {}
         self.outbox:                 queue.Queue[dict | None] = queue.Queue()
         self.inbox:                  queue.Queue[str]         = queue.Queue()
         self.update_decisions_inbox: queue.Queue[dict]        = queue.Queue()
@@ -245,6 +246,7 @@ class ICPDBSession:
                     check_pause=self.check_pause,
                     get_update_decisions=self.get_update_decisions,
                     run_mode=run_mode,
+                    prefs=self.prefs,
                 )
             except Exception as exc:
                 self.outbox.put({"type": "error", "message": str(exc)})
@@ -272,7 +274,8 @@ async def icpdb_websocket_endpoint(ws: WebSocket):
             return
 
         run_mode = msg.get("run_mode", "full")
-        session = ICPDBSession(ws)
+        prefs = mem.get_icpdb_prefs()
+        session = ICPDBSession(ws, prefs=prefs)
         session.start(run_mode)
 
         await ws.send_text(json.dumps({"type": "started", "run_mode": run_mode}))
@@ -317,6 +320,18 @@ async def icpdb_websocket_endpoint(ws: WebSocket):
 
 
 # ── ICPDB stats endpoint ──────────────────────────────────────────────────────
+
+@app.get("/api/icpdb/prefs")
+async def get_icpdb_prefs():
+    return JSONResponse(mem.get_icpdb_prefs())
+
+
+@app.post("/api/icpdb/prefs")
+async def save_icpdb_prefs(request: Request):
+    body = await request.json()
+    mem.save_icpdb_prefs(body)
+    return JSONResponse({"ok": True})
+
 
 @app.get("/api/icpdb/stats")
 async def get_icpdb_stats():

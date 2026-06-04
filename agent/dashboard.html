@@ -322,6 +322,30 @@
   .audit-field-pct.mid  { color: var(--yellow); }
   .audit-field-pct.low  { color: var(--red); }
 
+  /* ── Priority field marker ── */
+  .audit-field-row.priority .audit-field-name::before { content: '★ '; color: var(--yellow); font-size: 10px; }
+  .audit-field-row.priority { background: rgba(255,200,0,.04); }
+
+  /* ── Preferences modal ── */
+  .pref-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+  .pref-modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; width: min(560px, 95vw); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
+  .pref-modal-header { padding: 18px 20px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .pref-modal-title { font-size: 15px; font-weight: 700; }
+  .pref-modal-close { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; }
+  .pref-modal-close:hover { color: var(--text); }
+  .pref-modal-body { padding: 18px 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 18px; }
+  .pref-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); margin-bottom: 8px; }
+  .pref-field-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pref-field-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 20px; font-size: 12px; cursor: pointer; border: 1px solid var(--border); background: var(--bg3); color: var(--text); transition: all .15s; user-select: none; }
+  .pref-field-chip.selected { border-color: var(--yellow); background: rgba(255,200,0,.12); color: var(--yellow); }
+  .pref-field-chip .chip-star { font-size: 10px; display: none; }
+  .pref-field-chip.selected .chip-star { display: inline; }
+  .pref-notes-input { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; font-family: inherit; padding: 10px 12px; resize: vertical; min-height: 80px; box-sizing: border-box; }
+  .pref-notes-input:focus { outline: none; border-color: var(--purple); }
+  .pref-notes-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .pref-order-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .pref-modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+
   /* ── Duplicate detection section ── */
   .audit-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); padding: 10px 18px 6px; }
   .audit-dupes-list { padding: 0 18px 12px; display: flex; flex-direction: column; gap: 6px; }
@@ -484,7 +508,10 @@
   <aside class="icpdb-sidebar">
     <div class="sidebar-scroll">
       <div class="sidebar-section">
-        <div class="sidebar-label">Run Mode</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div class="sidebar-label" style="margin:0">Run Mode</div>
+          <button class="btn-icon" id="icpdb-prefs-btn" title="Preferences — set priority fields and guidance">⭐</button>
+        </div>
         <select id="icpdb-mode-select" class="month-input">
           <option value="full">Full Maintenance</option>
           <option value="audit_only">Audit Only</option>
@@ -566,6 +593,34 @@
     <div class="admin-actions">
       <button class="btn btn-muted" id="admin-reset-btn">Reset to Defaults</button>
       <button class="btn btn-primary" id="admin-save-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ICPDB Preferences modal -->
+<div class="pref-modal-backdrop" id="pref-modal-backdrop" style="display:none">
+  <div class="pref-modal">
+    <div class="pref-modal-header">
+      <div class="pref-modal-title">⭐ ICPDB Preferences</div>
+      <button class="pref-modal-close" id="pref-modal-close">✕</button>
+    </div>
+    <div class="pref-modal-body">
+      <div>
+        <div class="pref-section-label">Priority Fields</div>
+        <div class="pref-field-grid" id="pref-field-grid">
+          <div style="color:var(--muted);font-size:12px">Loading fields from last audit…</div>
+        </div>
+        <div class="pref-order-hint">Click fields to mark them as priority. The agent will focus research on these first and they'll appear at the top of audit reports.</div>
+      </div>
+      <div>
+        <div class="pref-section-label">Guidance for the Agent</div>
+        <textarea class="pref-notes-input" id="pref-notes-input" placeholder="e.g. Focus on performers who have shows in the next 3 months. Prioritise Instagram handles over websites."></textarea>
+        <div class="pref-notes-hint">Free-text instructions injected into every agent run. Be specific about what matters to you.</div>
+      </div>
+    </div>
+    <div class="pref-modal-footer">
+      <button class="btn btn-muted" id="pref-cancel-btn">Cancel</button>
+      <button class="btn btn-primary" id="pref-save-btn">Save Preferences</button>
     </div>
   </div>
 </div>
@@ -743,17 +798,21 @@ function renderIcpdbCard(stats) {
   const hs = a.health_score || 0;
   const hsCls = hs >= 75 ? 'good' : hs >= 50 ? 'mid' : 'low';
 
-  // Top 5 most incomplete fields
+  // Top fields: priority fields first (all of them), then worst non-priority fields to fill up to 5
   const completeness = a.completeness || {};
-  const fields = Object.entries(completeness)
-    .sort((x, y) => x[1].pct - y[1].pct)
-    .slice(0, 5);
+  const prioritySet = new Set(icpdbPrefs.priority_fields || []);
+  const allEntries = Object.entries(completeness);
+  const priorityEntries = allEntries.filter(([n]) => prioritySet.has(n)).sort((x, y) => x[1].pct - y[1].pct);
+  const otherEntries    = allEntries.filter(([n]) => !prioritySet.has(n)).sort((x, y) => x[1].pct - y[1].pct);
+  const maxShow = Math.max(5, priorityEntries.length);
+  const fields = [...priorityEntries, ...otherEntries].slice(0, maxShow);
 
   const bars = fields.map(([name, info]) => {
     const pct = info.pct || 0;
     const cls = pct >= 75 ? 'high' : pct >= 40 ? 'mid' : 'low';
+    const star = prioritySet.has(name) ? '<span style="color:var(--yellow);font-size:10px;margin-right:3px">★</span>' : '';
     return `<div class="completeness-bar-row">
-      <div class="completeness-bar-label" title="${esc(name)}">${esc(name)}</div>
+      <div class="completeness-bar-label" title="${esc(name)}">${star}${esc(name)}</div>
       <div class="completeness-bar-track"><div class="completeness-bar-fill ${cls}" style="width:${pct}%"></div></div>
       <div class="completeness-pct">${pct}%</div>
     </div>`;
@@ -1335,14 +1394,19 @@ function renderAuditMetrics(data) {
   const suspectedCount = dupes.suspected_count || 0;
   const totalDupes = exactCount + suspectedCount;
 
-  // Sort fields: lowest % first so problem areas are visible
-  const fields = Object.entries(completeness).sort((a, b) => a[1].pct - b[1].pct);
+  // Sort: priority fields first (by pct asc within priority), then rest by pct asc
+  const prioritySet = new Set(icpdbPrefs.priority_fields || []);
+  const allFields = Object.entries(completeness);
+  const priorityFields = allFields.filter(([n]) => prioritySet.has(n)).sort((a, b) => a[1].pct - b[1].pct);
+  const otherFields    = allFields.filter(([n]) => !prioritySet.has(n)).sort((a, b) => a[1].pct - b[1].pct);
+  const fields = [...priorityFields, ...otherFields];
 
   const fieldRowsHtml = fields.map(([name, stats]) => {
     const pct = stats.pct || 0;
     const cls = pct >= 70 ? 'good' : pct >= 40 ? 'mid' : 'low';
+    const isPriority = prioritySet.has(name) ? 'priority' : '';
     return `
-      <div class="audit-field-row">
+      <div class="audit-field-row ${isPriority}">
         <div class="audit-field-name" title="${esc(name)}">${esc(name)}</div>
         <div class="audit-bar-track">
           <div class="audit-bar-fill ${cls}" style="width:${pct}%"></div>
@@ -1746,12 +1810,83 @@ async function loadGallery() {
   }
 }
 
+// ── ICPDB Preferences ─────────────────────────────────────────────────────────
+let icpdbPrefs = { priority_fields: [], notes: '' };
+
+async function loadIcpdbPrefs() {
+  try {
+    icpdbPrefs = await fetch('/api/icpdb/prefs').then(r => r.json());
+  } catch {}
+}
+
+async function openPrefsModal() {
+  const backdrop = document.getElementById('pref-modal-backdrop');
+  const grid     = document.getElementById('pref-field-grid');
+  const notesEl  = document.getElementById('pref-notes-input');
+
+  notesEl.value = icpdbPrefs.notes || '';
+
+  // Populate fields from last audit if available
+  try {
+    const stats = await fetch('/api/icpdb/stats').then(r => r.json());
+    const completeness = stats?.last_audit?.completeness || {};
+    const allFields = Object.keys(completeness).sort();
+    if (allFields.length) {
+      const priority = icpdbPrefs.priority_fields || [];
+      grid.innerHTML = allFields.map(f => {
+        const sel = priority.includes(f) ? 'selected' : '';
+        return `<div class="pref-field-chip ${sel}" data-field="${esc(f)}" onclick="togglePrefChip(this)">
+          <span class="chip-star">★</span>${esc(f)}
+        </div>`;
+      }).join('');
+    } else {
+      grid.innerHTML = '<div style="color:var(--muted);font-size:12px">No audit data yet — run an audit first.</div>';
+    }
+  } catch {
+    grid.innerHTML = '<div style="color:var(--muted);font-size:12px">Could not load fields.</div>';
+  }
+
+  backdrop.style.display = 'flex';
+}
+
+function togglePrefChip(el) {
+  el.classList.toggle('selected');
+}
+
+async function savePrefs() {
+  const chips = document.querySelectorAll('#pref-field-grid .pref-field-chip.selected');
+  const priority_fields = Array.from(chips).map(c => c.dataset.field);
+  const notes = document.getElementById('pref-notes-input').value.trim();
+  icpdbPrefs = { priority_fields, notes };
+  try {
+    await fetch('/api/icpdb/prefs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(icpdbPrefs),
+    });
+  } catch {}
+  document.getElementById('pref-modal-backdrop').style.display = 'none';
+}
+
+document.getElementById('icpdb-prefs-btn').addEventListener('click', openPrefsModal);
+document.getElementById('pref-modal-close').addEventListener('click', () => {
+  document.getElementById('pref-modal-backdrop').style.display = 'none';
+});
+document.getElementById('pref-cancel-btn').addEventListener('click', () => {
+  document.getElementById('pref-modal-backdrop').style.display = 'none';
+});
+document.getElementById('pref-save-btn').addEventListener('click', savePrefs);
+document.getElementById('pref-modal-backdrop').addEventListener('click', e => {
+  if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+});
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 buildPhaseList();
 buildIcpdbPhaseList();
 const now = new Date();
 monthInput.value = now.toLocaleString('default', { month: 'long' }) + ' ' + now.getFullYear();
 loadAdminFields();
+loadIcpdbPrefs();
 loadOverview();
 </script>
 </body>

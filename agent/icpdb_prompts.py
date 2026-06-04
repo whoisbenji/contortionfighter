@@ -38,7 +38,7 @@ ACCURACY RULES:
 """
 
 
-def audit_prompt(run_mode: str = "full") -> str:
+def audit_prompt(run_mode: str = "full", prefs: dict | None = None) -> str:
     modes = {
         "full": "Run all five phases: Audit → Research → Review → Apply → Outreach.",
         "audit_only": "Run Phase 1 (Audit) only. Report findings and stop.",
@@ -46,4 +46,21 @@ def audit_prompt(run_mode: str = "full") -> str:
         "research_only": "Run Phase 1 (Audit), Phase 2 (Research), Phase 3 (Review), Phase 4 (Apply). Skip outreach.",
     }
     instruction = modes.get(run_mode, modes["full"])
-    return f"Please maintain the ICPDB. {instruction}\n\nDo not ask for clarification — proceed directly."
+    prompt = f"Please maintain the ICPDB. {instruction}"
+
+    if prefs:
+        priority_fields = prefs.get("priority_fields") or []
+        notes = (prefs.get("notes") or "").strip()
+        if priority_fields or notes:
+            prompt += "\n\nUSER PRIORITIES:"
+            if priority_fields:
+                fields_str = ", ".join(priority_fields)
+                prompt += (
+                    f"\n- Priority fields (focus research on these first, and highlight them "
+                    f"in audit reports): {fields_str}"
+                )
+            if notes:
+                prompt += f"\n- Additional guidance: {notes}"
+
+    prompt += "\n\nDo not ask for clarification — proceed directly."
+    return prompt
