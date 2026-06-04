@@ -296,29 +296,33 @@
   .icpdb-sidebar { grid-area: sidebar; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
   .icpdb-main { grid-area: main; display: flex; flex-direction: column; overflow: hidden; }
 
-  /* ── Update review cards ── */
-  .update-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; transition: border-color .2s; margin-bottom: 8px; }
-  .update-card.approving { border-color: var(--green); }
-  .update-card.rejecting { opacity: 0.45; }
-  .update-card-top { display: flex; align-items: flex-start; gap: 10px; }
-  .update-card-info { flex: 1; min-width: 0; }
+  /* ── Update review cards (grouped by performer) ── */
+  .update-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 10px; }
+  .update-performer-header { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; background: rgba(155,77,255,.07); border-bottom: 1px solid var(--border); gap: 10px; }
   .update-performer { font-weight: 700; font-size: 13px; }
-  .update-field { font-size: 11px; color: var(--cyan); font-family: var(--font-mono); margin-top: 2px; }
+  .update-performer-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .update-fields-list { display: flex; flex-direction: column; }
+  .update-field-row { padding: 10px 14px; display: flex; flex-direction: column; gap: 5px; transition: background .15s; }
+  .update-field-row.approving { background: rgba(77,255,145,.06); }
+  .update-field-row.rejecting { opacity: 0.4; }
+  .update-field-divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+  .update-field-row-left { display: flex; align-items: center; gap: 8px; }
+  .update-field { font-size: 11px; color: var(--cyan); font-family: var(--font-mono); }
   .update-values { font-size: 12px; }
   .update-current { color: var(--muted); text-decoration: line-through; }
   .update-arrow { color: var(--muted); margin: 0 6px; }
   .update-proposed { color: var(--text); font-weight: 600; }
-  .update-source { font-size: 10px; color: var(--muted); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .update-row-btns { display: flex; gap: 6px; margin-top: 2px; }
   .update-confidence { font-size: 9px; padding: 1px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
   .update-confidence.high   { background: rgba(77,255,145,.15); color: var(--green); }
   .update-confidence.medium { background: rgba(255,209,102,.15); color: var(--yellow); }
   .update-confidence.low    { background: rgba(255,69,96,.15); color: var(--red); }
-  .update-card-btns { display: flex; gap: 6px; flex-shrink: 0; }
-  .uc-btn { padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid; transition: all .15s; }
-  .uc-btn-approve { border-color: var(--green); color: var(--green); background: transparent; }
+  .uc-btn { padding: 4px 9px; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid; transition: all .15s; }
+  .uc-btn-approve, .uc-btn-approve-all { border-color: var(--green); color: var(--green); background: transparent; }
   .uc-btn-approve.selected { background: var(--green); color: #0a1a0e; }
-  .uc-btn-reject  { border-color: var(--border); color: var(--muted); background: transparent; }
-  .uc-btn-reject.selected  { background: var(--border); color: var(--text); }
+  .uc-btn-reject, .uc-btn-reject-all { border-color: var(--border); color: var(--muted); background: transparent; }
+  .uc-btn-reject.selected, .uc-btn-reject-all.selected { background: var(--border); color: var(--text); }
+  .uc-btn-approve.selected, .uc-btn-approve-all.selected { background: var(--green); color: #0a1a0e; border-color: var(--green); }
 
   /* ── Outreach cards ── */
   .outreach-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
@@ -1282,43 +1286,105 @@ function handleIcpdbMessage(data) {
 function showUpdateReviewPanel(proposals) {
   icpdbUpdateDecisions = {};
   icpdbUpdateCards.innerHTML = '';
+
+  // Group proposals by performer
+  const grouped = {};
   proposals.forEach((p, idx) => {
     icpdbUpdateDecisions[idx] = { approved: false, proposal: p };
+    const key = p.performer_id || p.performer_name;
+    if (!grouped[key]) grouped[key] = { performer: p, fields: [] };
+    grouped[key].fields.push({ idx, p });
+  });
+
+  Object.values(grouped).forEach(({ performer, fields }) => {
     const card = document.createElement('div');
     card.className = 'update-card';
-    card.id = `update-card-${idx}`;
-    const conf = p.confidence || 'medium';
+
+    const nameHtml = performer.url
+      ? `<a href="${esc(performer.url)}" target="_blank" style="color:var(--text);text-decoration:none">${esc(performer.performer_name)}</a>`
+      : esc(performer.performer_name);
+
+    const rowsHtml = fields.map(({ idx, p }) => {
+      const conf = p.confidence || 'medium';
+      const currentHtml = p.current_value
+        ? `<span class="update-current">${esc(p.current_value)}</span><span class="update-arrow">→</span>`
+        : '';
+      const sourceHtml = p.source
+        ? `<a href="${esc(p.source)}" target="_blank" style="color:var(--muted);font-size:10px;font-family:var(--font-mono);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">${esc(p.source)}</a>`
+        : '';
+      return `
+        <div class="update-field-row" id="update-row-${idx}">
+          <div class="update-field-row-left">
+            <span class="update-field">${esc(p.field)}</span>
+            <span class="update-confidence ${conf}">${conf}</span>
+          </div>
+          <div class="update-values">
+            ${currentHtml}
+            <span class="update-proposed">${esc(p.proposed_value)}</span>
+          </div>
+          ${sourceHtml}
+          <div class="update-row-btns">
+            <button class="uc-btn uc-btn-approve" data-idx="${idx}">Approve</button>
+            <button class="uc-btn uc-btn-reject" data-idx="${idx}">Reject</button>
+          </div>
+        </div>`;
+    }).join('<hr class="update-field-divider">');
+
     card.innerHTML = `
-      <div class="update-card-top">
-        <div class="update-card-info">
-          <div class="update-performer">${p.url ? `<a href="${esc(p.url)}" target="_blank" style="color:var(--text);text-decoration:none">${esc(p.performer_name)}</a>` : esc(p.performer_name)}</div>
-          <div class="update-field">${esc(p.field)}</div>
+      <div class="update-performer-header">
+        <div class="update-performer">${nameHtml}</div>
+        <div class="update-performer-actions">
+          <button class="uc-btn uc-btn-approve-all" data-performer="${esc(performer.performer_id || performer.performer_name)}">Approve All</button>
+          <button class="uc-btn uc-btn-reject-all"  data-performer="${esc(performer.performer_id || performer.performer_name)}">Reject All</button>
         </div>
-        <div class="update-card-btns">
-          <button class="uc-btn uc-btn-approve" data-idx="${idx}">Approve</button>
-          <button class="uc-btn uc-btn-reject" data-idx="${idx}">Reject</button>
-        </div>
-        <span class="update-confidence ${conf}">${conf}</span>
       </div>
-      <div class="update-values">
-        ${p.current_value ? `<span class="update-current">${esc(p.current_value)}</span><span class="update-arrow">→</span>` : ''}
-        <span class="update-proposed">${esc(p.proposed_value)}</span>
-      </div>
-      <div class="update-source"><a href="${esc(p.source)}" target="_blank" style="color:var(--muted)">${esc(p.source)}</a></div>`;
-    card.querySelector('.uc-btn-approve').addEventListener('click', () => {
-      icpdbUpdateDecisions[idx].approved = true;
-      card.className = 'update-card approving';
-      card.querySelectorAll('.uc-btn').forEach(b => b.classList.remove('selected'));
-      card.querySelector('.uc-btn-approve').classList.add('selected');
+      <div class="update-fields-list">${rowsHtml}</div>`;
+
+    // Per-field approve/reject
+    card.querySelectorAll('.uc-btn-approve[data-idx]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = btn.dataset.idx;
+        icpdbUpdateDecisions[idx].approved = true;
+        const row = document.getElementById(`update-row-${idx}`);
+        row.classList.add('approving'); row.classList.remove('rejecting');
+        row.querySelector('.uc-btn-approve').classList.add('selected');
+        row.querySelector('.uc-btn-reject').classList.remove('selected');
+      });
     });
-    card.querySelector('.uc-btn-reject').addEventListener('click', () => {
-      icpdbUpdateDecisions[idx].approved = false;
-      card.className = 'update-card rejecting';
-      card.querySelectorAll('.uc-btn').forEach(b => b.classList.remove('selected'));
-      card.querySelector('.uc-btn-reject').classList.add('selected');
+    card.querySelectorAll('.uc-btn-reject[data-idx]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = btn.dataset.idx;
+        icpdbUpdateDecisions[idx].approved = false;
+        const row = document.getElementById(`update-row-${idx}`);
+        row.classList.add('rejecting'); row.classList.remove('approving');
+        row.querySelector('.uc-btn-reject').classList.add('selected');
+        row.querySelector('.uc-btn-approve').classList.remove('selected');
+      });
     });
+
+    // Approve-all / reject-all for this performer
+    card.querySelector('.uc-btn-approve-all').addEventListener('click', () => {
+      fields.forEach(({ idx }) => {
+        icpdbUpdateDecisions[idx].approved = true;
+        const row = document.getElementById(`update-row-${idx}`);
+        row.classList.add('approving'); row.classList.remove('rejecting');
+        row.querySelector('.uc-btn-approve').classList.add('selected');
+        row.querySelector('.uc-btn-reject').classList.remove('selected');
+      });
+    });
+    card.querySelector('.uc-btn-reject-all').addEventListener('click', () => {
+      fields.forEach(({ idx }) => {
+        icpdbUpdateDecisions[idx].approved = false;
+        const row = document.getElementById(`update-row-${idx}`);
+        row.classList.add('rejecting'); row.classList.remove('approving');
+        row.querySelector('.uc-btn-reject').classList.add('selected');
+        row.querySelector('.uc-btn-approve').classList.remove('selected');
+      });
+    });
+
     icpdbUpdateCards.appendChild(card);
   });
+
   icpdbUpdateReview.style.display = 'flex';
   icpdbUpdateReview.scrollIntoView({ behavior: 'smooth' });
 }
