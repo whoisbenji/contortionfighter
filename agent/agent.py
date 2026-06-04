@@ -11,7 +11,7 @@ from typing import Any
 
 import anthropic
 
-from .prompts import SYSTEM_PROMPT, phase_prompt
+from .prompts import SYSTEM_PROMPT, phase_prompt, replay_prompt
 from .tools import (
     web_search,
     notion_create_research_page,
@@ -25,6 +25,7 @@ from .tools import (
     webflow_create_blog_draft,
     generate_images,
 )
+from . import memory as mem
 
 MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 8192
@@ -177,7 +178,7 @@ TOOLS: list[dict] = [
         "name": "webflow_find_performers",
         "description": (
             "Find Webflow CMS item IDs for a list of performer names. "
-            "Use in Phase 4 to populate the featured-performers field."
+            "Use in Phase 5 to populate the featured-performers field."
         ),
         "input_schema": {
             "type": "object",
@@ -303,7 +304,40 @@ _NOOP_PAUSE  = lambda: None
 _NOOP_REVIEW = lambda performers: {"decisions": [{"name": p["name"], "action": "skip"} for p in performers]}
 
 
-# ── Core loop (shared by CLI and dashboard) ───────────────────────────────────
+# ── Phase output extraction ───────────────────────────────────────────────────
+
+def _extract_phase_output(tool_name: str, tool_input: dict, result: dict) -> tuple[int, dict] | None:
+    """Return (phase, data) if this tool result should be persisted, else None."""
+    if tool_name == "notion_create_research_page" and "error" not in result:
+        return 1, {
+            "notion_page_id":    result.get("page_id"),
+            "notion_url":        result.get("url"),
+            "content_markdown":  tool_input.get("content_markdown", ""),
+        }
+    if tool_name == "generate_images" and "error" not in result:
+        return 3, {
+            "story_path":        result.get("story_path"),
+            "header_path":       result.get("header_path"),
+            "webflow_asset_id":  result.get("webflow_asset_id"),
+        }
+    if tool_name == "notion_create_article_page" and "error" not in result:
+        return 4, {
+            "notion_page_id":  result.get("page_id"),
+            "notion_url":      result.get("url"),
+            "body_markdown":   tool_input.get("article_body", ""),
+            "performer_ids":   tool_input.get("performer_page_ids", []),
+            "show_ids":        tool_input.get("show_page_ids", []),
+        }
+    if tool_name == "webflow_create_blog_draft" and "error" not in result:
+        return 5, {
+            "item_id":      result.get("item_id"),
+            "draft_url":    result.get("draft_url"),
+            "editor_url":   result.get("webflow_editor_url"),
+        }
+    return None
+
+
+# ── Core loop ─────────────────────────────────────────────────────────────────
 
 def _loop(
     month_label: str,
@@ -311,10 +345,15 @@ def _loop(
     on_event,
     check_pause,
     get_performer_review,
+    run_id: str,
     verbose: bool,
 ) -> str:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     current_phase = 0
+    # Accumulate matching data across tool calls for phase 2 save
+    _matched_ids: list[str] = []
+    _matched_names: list[str] = []
+    _show_ids: list[str] = []
 
     while True:
         on_event({"type": "thinking"})
@@ -351,13 +390,11 @@ def _loop(
             tool_name  = block.name
             tool_input = block.input
 
-            # Emit phase change if needed
             phase_num, phase_label = TOOL_PHASE_MAP.get(tool_name, (current_phase, "Working"))
             if phase_num != current_phase:
                 current_phase = phase_num
                 on_event({"type": "phase", "phase": phase_num, "label": phase_label})
 
-            # Emit tool_call event
             on_event({
                 "type":  "tool_call",
                 "tool":  tool_name,
@@ -368,11 +405,11 @@ def _loop(
             if verbose:
                 print(f"\n🔧 {tool_name}: {json.dumps(tool_input)[:200]}")
 
-            # ── Special: performer review blocks until user responds ──────
+            # ── Performer review: block until user responds ───────────────
             if tool_name == "request_performer_review":
                 performers = tool_input.get("unmatched_performers", [])
                 on_event({"type": "performer_review", "performers": performers})
-                result = get_performer_review(performers)  # blocks
+                result = get_performer_review(performers)
                 tool_results.append({
                     "type":        "tool_result",
                     "tool_use_id": block.id,
@@ -386,7 +423,7 @@ def _loop(
                 })
                 continue
 
-            # Check for pause / interject before running the tool
+            # ── Pause / interject check ───────────────────────────────────
             interject = check_pause()
             if interject:
                 messages.append({"role": "user", "content": (
@@ -412,6 +449,28 @@ def _loop(
                 break
 
             result = _dispatch(tool_name, tool_input)
+
+            # ── Persist phase outputs ─────────────────────────────────────
+            phase_out = _extract_phase_output(tool_name, tool_input, result)
+            if phase_out and run_id:
+                phase_num_out, phase_data = phase_out
+                mem.save_phase(run_id, phase_num_out, phase_data)
+                on_event({"type": "phase_saved", "phase": phase_num_out})
+
+            # Accumulate performer/show IDs for phase 2 save
+            if tool_name == "notion_create_performer" and "error" not in result:
+                _matched_ids.append(result.get("page_id", ""))
+                _matched_names.append(result.get("name", ""))
+            if tool_name == "notion_create_article_page" and "error" not in result:
+                # Save phase 2 matching data using what we accumulated + what the call had
+                p_ids = tool_input.get("performer_page_ids", [])
+                s_ids = tool_input.get("show_page_ids", [])
+                if run_id:
+                    mem.save_phase(run_id, 2, {
+                        "performer_page_ids": p_ids,
+                        "show_page_ids":      s_ids,
+                        "performer_names":    _matched_names,
+                    })
 
             result_preview = json.dumps(result, ensure_ascii=False)
             on_event({
@@ -439,11 +498,18 @@ def _loop(
 # ── Public entry points ───────────────────────────────────────────────────────
 
 def run(month_label: str, verbose: bool = True) -> str:
-    """CLI entry point — prints progress, no WebSocket."""
+    """CLI entry point."""
+    run_id = mem.create_run(month_label)
     messages = [{"role": "user", "content": phase_prompt(month_label)}]
     if verbose:
         print(f"\n🤸 Starting performance review agent for {month_label}\n{'─'*60}")
-    return _loop(month_label, messages, _NOOP_EVENT, _NOOP_PAUSE, _NOOP_REVIEW, verbose)
+    try:
+        result = _loop(month_label, messages, _NOOP_EVENT, _NOOP_PAUSE, _NOOP_REVIEW, run_id, verbose)
+        mem.complete_run(run_id)
+        return result
+    except Exception as exc:
+        mem.fail_run(run_id, str(exc))
+        raise
 
 
 def run_with_callbacks(
@@ -451,8 +517,33 @@ def run_with_callbacks(
     on_event,
     check_pause,
     get_performer_review,
+    run_id: str | None = None,
+    replay_from: int = 1,
+    cached_run: dict | None = None,
 ) -> str:
     """Dashboard entry point — streams events via callbacks."""
-    messages = [{"role": "user", "content": phase_prompt(month_label)}]
-    on_event({"type": "phase", "phase": 1, "label": "Research"})
-    return _loop(month_label, messages, on_event, check_pause, get_performer_review, verbose=False)
+    if run_id is None:
+        run_id = mem.create_run(month_label)
+
+    on_event({"type": "run_id", "run_id": run_id})
+
+    if replay_from > 1 and cached_run:
+        user_msg = replay_prompt(month_label, cached_run, replay_from)
+    else:
+        user_msg = phase_prompt(month_label)
+
+    messages = [{"role": "user", "content": user_msg}]
+
+    start_phase = max(1, replay_from)
+    on_event({"type": "phase", "phase": start_phase,
+              "label": {1:"Research",2:"Performer Matching",3:"Image Generation",
+                        4:"Writing Article",5:"Publishing to Webflow"}.get(start_phase,"Working")})
+
+    try:
+        result = _loop(month_label, messages, on_event, check_pause, get_performer_review, run_id, verbose=False)
+        mem.complete_run(run_id)
+        on_event({"type": "history_updated"})
+        return result
+    except Exception as exc:
+        mem.fail_run(run_id, str(exc))
+        raise

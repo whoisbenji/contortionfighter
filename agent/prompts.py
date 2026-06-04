@@ -232,3 +232,67 @@ def phase_prompt(month_label: str) -> str:
         "handles) before saving the research document.\n\n"
         "Do not ask for clarification — make reasonable editorial decisions and proceed."
     )
+
+
+def replay_prompt(month_label: str, cached_run: dict, replay_from: int) -> str:
+    """Build the opening user message for a replay run that skips already-completed phases."""
+    import json
+
+    lines = [
+        f"Please continue the monthly contortion performance review for **{month_label}**.",
+        f"Phases 1–{replay_from - 1} have already been completed. "
+        f"**Start directly from Phase {replay_from}** and complete all remaining phases.",
+        "",
+    ]
+
+    if cached_run.get("feedback"):
+        lines += [
+            "**Feedback from the previous run — please incorporate this:**",
+            cached_run["feedback"],
+            "",
+        ]
+
+    research = cached_run.get("research")
+    if research and replay_from > 1:
+        lines.append(f"**Phase 1 (Research) — already saved** to Notion: {research.get('notion_url', 'n/a')}")
+        content = research.get("content_markdown", "")
+        if content:
+            # Truncate very long research to fit context
+            snippet = content[:12000] + ("\n\n[... truncated ...]" if len(content) > 12000 else "")
+            lines += ["", "<cached_research>", snippet, "</cached_research>", ""]
+
+    matching = cached_run.get("matching")
+    if matching and replay_from > 2:
+        p_ids   = matching.get("performer_page_ids", [])
+        s_ids   = matching.get("show_page_ids", [])
+        p_names = matching.get("performer_names", [])
+        lines += [
+            f"**Phase 2 (Matching) — already complete.**",
+            f"Matched performer Notion IDs ({len(p_ids)}): {json.dumps(p_ids)}",
+            f"Performer names: {json.dumps(p_names)}",
+            f"Matched show Notion IDs ({len(s_ids)}): {json.dumps(s_ids)}",
+            "",
+        ]
+
+    images = cached_run.get("images")
+    if images and replay_from > 3:
+        lines += [
+            f"**Phase 3 (Images) — already complete.**",
+            f"Story: {images.get('story_path', 'n/a')}",
+            f"Header: {images.get('header_path', 'n/a')}",
+            f"Webflow asset ID: {images.get('webflow_asset_id', 'n/a')}",
+            "",
+        ]
+
+    article = cached_run.get("article")
+    if article and replay_from > 4:
+        lines += [
+            f"**Phase 4 (Article) — already complete.** Notion: {article.get('notion_url', 'n/a')}",
+        ]
+        body = article.get("body_markdown", "")
+        if body:
+            snippet = body[:12000] + ("\n\n[... truncated ...]" if len(body) > 12000 else "")
+            lines += ["", "<cached_article>", snippet, "</cached_article>", ""]
+
+    lines.append("Do not ask for clarification — proceed directly.")
+    return "\n".join(lines)
