@@ -4,25 +4,22 @@ Image compositor for the monthly performance review.
 Reads performer photos from Notion ICPDB, composites them into the Figma
 template layout (scattered rotated rounded-rect cards on a dark background),
 and outputs two formats:
-  • Instagram Story  — 1080 × 1920 px  (9:16)
-  • Article header   — 1500 × 844 px   (16:9)
+  • Instagram Story  — 1080 × 1920 px  (9:16)  — frame 1:21, has title text
+  • Article header   — 1500 × 844 px   (16:9)  — frame 1:2,  no text
 
-The template geometry is derived directly from the Figma file
-(LzSysRugmbHEVMdCAVDe4k, node 1:21).
+Template geometry derived from Figma file LzSysRugmbHEVMdCAVDe4k.
 """
 
 from __future__ import annotations
 
 import io
-import math
 import os
 import re
-import urllib.request
 from pathlib import Path
 from typing import NamedTuple
 
 import requests
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 from .config import NOTION_BASE, NOTION_ICPDB_DS
 
@@ -30,63 +27,70 @@ from .config import NOTION_BASE, NOTION_ICPDB_DS
 # ── Template geometry (native px, from Figma) ────────────────────────────────
 
 class Slot(NamedTuple):
-    cx: float   # centre-x in native coords
-    cy: float   # centre-y in native coords
-    size: float # card side length (square, before rotation)
-    radius: float  # corner radius
+    cx: float    # centre-x in native coords
+    cy: float    # centre-y in native coords
+    size: float  # card side length (square, before rotation)
+    radius: float
 
 
-NATIVE_W = 496
-NATIVE_H = 1073
-CARD_ROTATION = 30  # degrees, all slots identical
+CARD_ROTATION = 30  # degrees, same for all slots
+BG_COLOUR     = "#090909"
+TEXT_COLOUR   = (255, 255, 255)
 
 
-def _slot(container_left, container_top, container_size, card_size, radius=24):
-    cx = container_left + container_size / 2
-    cy = container_top + container_size / 2
-    return Slot(cx, cy, card_size, radius)
+# Frame 1:21 — Social / Story template, native 496×1073, title at (26, 816)
+STORY_NATIVE_W = 496
+STORY_NATIVE_H = 1073
+STORY_TITLE_LEFT  = 26
+STORY_TITLE_TOP   = 816
+STORY_FONT_SIZE_NATIVE = 44
 
-
-# 16 slots extracted from Figma node positions
-SLOTS: list[Slot] = [
-    _slot(273.95, -18.58,  168.502, 123.352),   # 0
-    _slot(-46.23, -20.58,  166.863, 122.152),   # 1
-    _slot( 54.13, 354.55,  175.746, 128.655),   # 2
-    _slot(150.00, 511.00,  175.746, 128.655),   # 3
-    _slot(113.36, -16.91,  166.863, 122.152),   # 4
-    _slot(125.73, 231.49,  166.863, 122.152),   # 5
-    _slot(-38.53, 231.49,  166.863, 122.152),   # 6
-    _slot( 54.00, 629.00,  157.746, 115.478),   # 7
-    _slot(351.50, 102.95,  166.863, 122.152),   # 8
-    _slot( 38.00, 102.95,  166.863, 122.152),   # 9
-    _slot(218.00, 118.00,  152.146, 111.379),   # 10
-    _slot(287.00, 231.00,  176.217, 129.000),   # 11
-    _slot(209.00, 695.00,  176.217, 129.000),   # 12
-    _slot(310.00, 569.00,  176.217, 129.000),   # 13
-    _slot(211.00, 354.00,  176.217, 129.000),   # 14
-    _slot(353.00, 407.00,  176.217, 129.000),   # 15
+STORY_SLOTS: list[Slot] = [
+    Slot(419.85,  65.65, 168.50, 24),
+    Slot( 98.23,  62.83, 166.86, 24),
+    Slot(206.37, 442.47, 175.75, 24),
+    Slot(302.17, 598.87, 175.75, 24),
+    Slot(257.83,  66.53, 166.86, 24),
+    Slot(270.23, 314.93, 166.86, 24),
+    Slot(105.93, 314.93, 166.86, 24),
+    Slot(190.57, 707.87, 157.75, 24),
+    Slot(496.03, 186.43, 166.86, 24),
+    Slot(182.53, 186.43, 166.86, 24),
+    Slot(349.77, 194.07, 152.15, 24),
+    Slot(439.61, 319.11, 176.22, 24),
+    Slot(361.61, 783.11, 176.22, 24),
+    Slot(462.61, 657.11, 176.22, 24),
+    Slot(363.61, 442.11, 176.22, 24),
+    Slot(505.61, 495.11, 176.22, 24),
 ]
 
-# Title text geometry (native px)
-TITLE_LEFT   = 26
-TITLE_TOP    = 816
-TITLE_WIDTH  = 460
-FONT_SIZE_NATIVE = 44
-BG_COLOUR    = "#090909"
-TEXT_COLOUR  = (255, 255, 255)
+# Frame 1:2 — Header template, native 1956×911, no text
+HEADER_NATIVE_W = 1956
+HEADER_NATIVE_H = 911
+
+HEADER_SLOTS: list[Slot] = [
+    Slot(1083.75, 108.45, 393.70, 24),
+    Slot( 332.34, 101.94, 389.88, 24),
+    Slot(1514.22,  16.32, 410.63, 24),
+    Slot(1869.92, 112.32, 410.63, 24),
+    Slot( 705.24, 110.44, 389.88, 24),
+    Slot( 757.44, 690.84, 389.88, 24),
+    Slot( 373.64, 690.84, 389.88, 24),
+    Slot(1332.69, 312.00, 368.57, 24),
+    Slot( 911.14, 390.54, 389.88, 24),
+    Slot( 178.64, 390.54, 389.88, 24),
+    Slot( 514.75, 399.05, 355.49, 24),
+    Slot(1192.17, 596.47, 411.73, 24),
+    Slot(1698.47, 427.17, 411.73, 24),
+    Slot(1951.97, 727.57, 411.73, 24),
+    Slot(1493.27, 782.87, 411.73, 24),
+    Slot(1034.57, 885.87, 411.73, 24),
+]
 
 
 # ── Font loading ──────────────────────────────────────────────────────────────
 
 FONT_CACHE_DIR = Path(__file__).parent / "_fonts"
-FONT_URL = (
-    "https://fonts.gstatic.com/s/unbounded/v11/"
-    "d3p-idDNMfFfseWMB-FIXh8h7g.woff2"
-)
-FONT_TTF_URL = (
-    "https://fonts.gstatic.com/s/unbounded/v11/"
-    "d3p-idDNMfFfseWMBPFI.ttf"
-)
 
 
 def _load_font(size_px: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -94,10 +98,7 @@ def _load_font(size_px: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     ttf_path = FONT_CACHE_DIR / "Unbounded-Bold.ttf"
     if not ttf_path.exists():
         try:
-            # Try fetching a usable TTF subset from Google Fonts CSS
-            css_url = (
-                "https://fonts.googleapis.com/css2?family=Unbounded:wght@700"
-            )
+            css_url = "https://fonts.googleapis.com/css2?family=Unbounded:wght@700"
             headers = {"User-Agent": "Mozilla/5.0"}
             resp = requests.get(css_url, headers=headers, timeout=10)
             urls = re.findall(r"url\((https://[^)]+\.ttf)\)", resp.text)
@@ -107,15 +108,17 @@ def _load_font(size_px: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
                 font_bytes = requests.get(urls[0], timeout=10).content
                 ttf_path.write_bytes(font_bytes)
         except Exception:
-            pass  # fall back to default below
+            pass
 
     try:
         if ttf_path.exists():
             return ImageFont.truetype(str(ttf_path), size_px)
-        # Try system bold fonts as fallback
-        for sys_font in ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                         "/System/Library/Fonts/Helvetica.ttc",
-                         "arial.ttf", "arialbd.ttf"]:
+        for sys_font in [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/System/Library/Fonts/Helvetica.ttc",
+            "arial.ttf",
+            "arialbd.ttf",
+        ]:
             try:
                 return ImageFont.truetype(sys_font, size_px)
             except OSError:
@@ -144,29 +147,21 @@ def _paste_card(
     x_offset: int = 0,
     y_offset: int = 0,
 ) -> None:
-    """
-    Resize, round-corner-mask, rotate a performer photo and paste it onto
-    the canvas at the slot position (scaled by `scale`).
-    """
     card_px   = max(4, int(slot.size   * scale))
     radius_px = max(2, int(slot.radius * scale))
 
-    # Crop source photo to square (centre crop)
     w, h = photo.size
     min_side = min(w, h)
-    left  = (w - min_side) // 2
-    top   = (h - min_side) // 2
+    left = (w - min_side) // 2
+    top  = (h - min_side) // 2
     photo = photo.crop((left, top, left + min_side, top + min_side))
     photo = photo.resize((card_px, card_px), Image.LANCZOS).convert("RGBA")
 
-    # Apply rounded corner mask
     mask = _rounded_mask(card_px, radius_px)
     photo.putalpha(mask)
 
-    # Rotate 30° with expand so corners don't clip
     rotated = photo.rotate(-CARD_ROTATION, expand=True, resample=Image.BICUBIC)
 
-    # Centre of rotation on canvas
     cx = int(slot.cx * scale) + x_offset
     cy = int(slot.cy * scale) + y_offset
 
@@ -176,33 +171,22 @@ def _paste_card(
     canvas.paste(rotated, (paste_x, paste_y), rotated)
 
 
-def _draw_title(
-    canvas: Image.Image,
-    month_label: str,
-    scale: float,
-    x_offset: int = 0,
-    y_offset: int = 0,
-) -> None:
-    draw = ImageDraw.Draw(canvas)
-    font_size = max(12, int(FONT_SIZE_NATIVE * scale))
-    font = _load_font(font_size)
-    x = int(TITLE_LEFT * scale) + x_offset
-    y = int(TITLE_TOP  * scale) + y_offset
-    draw.text((x, y), f"{month_label}\nperformances", font=font, fill=TEXT_COLOUR)
-
-
 def _build_canvas(
-    photos: list[Image.Image],
+    photos: list[Image.Image | None],
+    slots: list[Slot],
     out_w: int,
     out_h: int,
     scale: float,
     x_offset: int,
     y_offset: int,
-    month_label: str,
+    month_label: str | None = None,
+    title_left_native: float = 0,
+    title_top_native: float = 0,
+    font_size_native: int = 44,
 ) -> Image.Image:
     canvas = Image.new("RGBA", (out_w, out_h), BG_COLOUR)
 
-    for i, slot in enumerate(SLOTS):
+    for i, slot in enumerate(slots):
         if i >= len(photos):
             break
         photo = photos[i]
@@ -213,7 +197,14 @@ def _build_canvas(
         except Exception as exc:
             print(f"  ⚠ Skipped slot {i}: {exc}")
 
-    _draw_title(canvas, month_label, scale, x_offset, y_offset)
+    if month_label is not None:
+        draw = ImageDraw.Draw(canvas)
+        font_size = max(12, int(font_size_native * scale))
+        font = _load_font(font_size)
+        x = int(title_left_native * scale) + x_offset
+        y = int(title_top_native  * scale) + y_offset
+        draw.text((x, y), f"{month_label}\nperformances", font=font, fill=TEXT_COLOUR)
+
     return canvas.convert("RGB")
 
 
@@ -221,16 +212,27 @@ def _build_canvas(
 
 def render_story(
     month_label: str,
-    photos: list[Image.Image],
+    photos: list[Image.Image | None],
     output_path: str | Path,
 ) -> Path:
-    """Render a 1080 × 1920 Instagram Story PNG."""
+    """Render a 1080 × 1920 Instagram Story PNG (frame 1:21, with title text)."""
     out_w, out_h = 1080, 1920
-    # Scale so the native template fills the height
-    scale = out_h / NATIVE_H          # ≈ 1.789
-    rendered_w = int(NATIVE_W * scale)  # ≈ 887
-    x_offset = (out_w - rendered_w) // 2
-    canvas = _build_canvas(photos, out_w, out_h, scale, x_offset, 0, month_label)
+    scale    = out_h / STORY_NATIVE_H                      # ≈ 1.789
+    x_offset = (out_w - int(STORY_NATIVE_W * scale)) // 2  # centres horizontally
+
+    canvas = _build_canvas(
+        photos=photos,
+        slots=STORY_SLOTS,
+        out_w=out_w,
+        out_h=out_h,
+        scale=scale,
+        x_offset=x_offset,
+        y_offset=0,
+        month_label=month_label,
+        title_left_native=STORY_TITLE_LEFT,
+        title_top_native=STORY_TITLE_TOP,
+        font_size_native=STORY_FONT_SIZE_NATIVE,
+    )
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(str(output_path), "PNG", optimize=True)
@@ -239,35 +241,24 @@ def render_story(
 
 def render_header(
     month_label: str,
-    photos: list[Image.Image],
+    photos: list[Image.Image | None],
     output_path: str | Path,
 ) -> Path:
-    """
-    Render a 1500 × 844 article header PNG.
-
-    Layout: the template collage fills the left ~40% of the canvas (scaled to
-    full height). The right 60% is solid dark background with the title text
-    repositioned for landscape reading.
-    """
+    """Render a 1500 × 844 article header PNG (frame 1:2, no text)."""
     out_w, out_h = 1500, 844
-    scale = out_h / NATIVE_H          # ≈ 0.787
-    rendered_w = int(NATIVE_W * scale)  # ≈ 390
-    x_offset = 0
-    canvas = _build_canvas(photos, out_w, out_h, scale, x_offset, 0, month_label)
+    scale    = out_w / HEADER_NATIVE_W                      # ≈ 0.767, width-constrained
+    y_offset = (out_h - int(HEADER_NATIVE_H * scale)) // 2  # centres vertically
 
-    # Reposition title to right-side area for landscape feel
-    draw = ImageDraw.Draw(canvas)
-    font_size = max(12, int(72 * scale * 1.6))  # larger than native for landscape
-    font = _load_font(font_size)
-    title_x = rendered_w + 60
-    title_y = out_h // 2 - font_size
-    draw.text(
-        (title_x, title_y),
-        f"{month_label}\nperformances",
-        font=font,
-        fill=TEXT_COLOUR,
+    canvas = _build_canvas(
+        photos=photos,
+        slots=HEADER_SLOTS,
+        out_w=out_w,
+        out_h=out_h,
+        scale=scale,
+        x_offset=0,
+        y_offset=y_offset,
+        month_label=None,  # no title on header
     )
-
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(str(output_path), "PNG", optimize=True)
@@ -285,11 +276,7 @@ def _notion_headers() -> dict:
 
 
 def fetch_performer_photos(performer_ids: list[str], limit: int = 16) -> list[Image.Image | None]:
-    """
-    Download the 'Main photo' for each Notion performer page ID.
-    Returns a list of PIL Images (or None where no photo is available),
-    up to `limit` entries.
-    """
+    """Download the 'Main photo' for each Notion performer page ID."""
     photos: list[Image.Image | None] = []
 
     for page_id in performer_ids[:limit]:
@@ -300,16 +287,14 @@ def fetch_performer_photos(performer_ids: list[str], limit: int = 16) -> list[Im
                 timeout=15,
             )
             resp.raise_for_status()
-            page = resp.json()
+            page  = resp.json()
             props = page.get("properties", {})
-            main_photo = props.get("Main photo", {})
+            files = props.get("Main photo", {}).get("files", [])
 
-            files = main_photo.get("files", [])
             if not files:
                 photos.append(None)
                 continue
 
-            # Notion files can be "file" (internal, has expiry URL) or "external"
             file_entry = files[0]
             if file_entry.get("type") == "file":
                 url = file_entry["file"]["url"]
@@ -328,7 +313,6 @@ def fetch_performer_photos(performer_ids: list[str], limit: int = 16) -> list[Im
             print(f"  ⚠ Could not fetch photo for {page_id}: {exc}")
             photos.append(None)
 
-    # Pad to requested limit with None
     while len(photos) < limit:
         photos.append(None)
 
@@ -338,19 +322,15 @@ def fetch_performer_photos(performer_ids: list[str], limit: int = 16) -> list[Im
 # ── Webflow asset upload ──────────────────────────────────────────────────────
 
 def upload_to_webflow(image_path: Path, asset_name: str) -> dict:
-    """
-    Upload an image file to Webflow Assets using the v2 data API.
-    Returns {"asset_id": ..., "url": ...}.
-    """
+    """Upload an image file to Webflow Assets (v2). Returns {"asset_id", "url"}."""
     from .config import WEBFLOW_BASE, WEBFLOW_SITE_ID
+    import hashlib
 
     webflow_key = os.environ["WEBFLOW_API_KEY"]
     headers = {"Authorization": f"Bearer {webflow_key}"}
 
-    # Step 1: Create asset metadata entry
     file_bytes = image_path.read_bytes()
-    import hashlib
-    file_hash = hashlib.md5(file_bytes).hexdigest()
+    file_hash  = hashlib.md5(file_bytes).hexdigest()
 
     meta_resp = requests.post(
         f"{WEBFLOW_BASE}/sites/{WEBFLOW_SITE_ID}/assets",
@@ -361,14 +341,9 @@ def upload_to_webflow(image_path: Path, asset_name: str) -> dict:
     meta_resp.raise_for_status()
     meta = meta_resp.json()
 
-    upload_url     = meta["uploadUrl"]
-    upload_details = meta["uploadDetails"]
-    asset_id       = meta["id"]
-
-    # Step 2: POST multipart to S3
-    fields = {k: str(v) for k, v in upload_details.items()}
+    fields = {k: str(v) for k, v in meta["uploadDetails"].items()}
     upload_resp = requests.post(
-        upload_url,
+        meta["uploadUrl"],
         data=fields,
         files={"file": (asset_name, file_bytes, "image/png")},
         timeout=60,
@@ -376,7 +351,7 @@ def upload_to_webflow(image_path: Path, asset_name: str) -> dict:
     if upload_resp.status_code not in (200, 201, 204):
         raise RuntimeError(f"S3 upload failed: {upload_resp.status_code} {upload_resp.text[:200]}")
 
-    return {"asset_id": asset_id, "url": meta.get("hostedUrl", "")}
+    return {"asset_id": meta["id"], "url": meta.get("hostedUrl", "")}
 
 
 # ── Top-level orchestration ───────────────────────────────────────────────────
@@ -390,9 +365,7 @@ def generate_and_upload_images(
     Full pipeline:
       1. Fetch performer photos from Notion ICPDB
       2. Render Story (1080×1920) and Header (1500×844) PNGs
-      3. Save to output_dir (default: ./output/<month-slug>/)
-      4. Upload header to Webflow Assets
-
+      3. Upload header to Webflow Assets
     Returns dict with local paths and Webflow asset info.
     """
     if output_dir is None:
@@ -402,12 +375,11 @@ def generate_and_upload_images(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"  📸 Fetching performer photos from Notion ({len(performer_ids)} performers)…")
-    photos = fetch_performer_photos(performer_ids, limit=16)
+    photos  = fetch_performer_photos(performer_ids, limit=16)
     present = sum(1 for p in photos if p is not None)
     print(f"     {present}/{min(len(performer_ids), 16)} photos fetched successfully.")
 
-    slug = month_label.lower().replace(" ", "-")
-
+    slug        = month_label.lower().replace(" ", "-")
     story_path  = output_dir / f"{slug}-story.png"
     header_path = output_dir / f"{slug}-header.png"
 
@@ -428,8 +400,8 @@ def generate_and_upload_images(
         asset_info = {"asset_id": None, "url": None}
 
     return {
-        "story_path":     str(story_path),
-        "header_path":    str(header_path),
-        "webflow_asset_id": asset_info["asset_id"],
+        "story_path":        str(story_path),
+        "header_path":       str(header_path),
+        "webflow_asset_id":  asset_info["asset_id"],
         "webflow_asset_url": asset_info["url"],
     }
