@@ -347,8 +347,10 @@ def _loop(
     get_performer_review,
     run_id: str,
     verbose: bool,
+    tools_override: list[dict] | None = None,
 ) -> str:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    active_tools = tools_override if tools_override is not None else TOOLS
     current_phase = 0
     # Accumulate matching data across tool calls for phase 2 save
     _matched_ids: list[str] = []
@@ -363,7 +365,7 @@ def _loop(
             model=MODEL,
             max_tokens=MAX_TOKENS,
             system=SYSTEM_PROMPT,
-            tools=TOOLS,
+            tools=active_tools,
             messages=messages,
         )
 
@@ -436,7 +438,7 @@ def _loop(
                     model=MODEL,
                     max_tokens=MAX_TOKENS,
                     system=SYSTEM_PROMPT,
-                    tools=TOOLS,
+                    tools=active_tools,
                     messages=messages,
                 )
                 messages.append({"role": "assistant", "content": rethink.content})
@@ -534,13 +536,32 @@ def run_with_callbacks(
 
     messages = [{"role": "user", "content": user_msg}]
 
+    # When replaying, restrict available tools to only phases >= replay_from
+    # so the model can't accidentally re-run earlier phases
+    phase_tool_min = {
+        "web_search": 1,
+        "notion_create_research_page": 1,
+        "notion_list_performers_in_icpdb": 2,
+        "notion_search_performer": 2,
+        "request_performer_review": 2,
+        "notion_create_performer": 2,
+        "notion_list_shows": 2,
+        "notion_search_show": 2,
+        "generate_images": 3,
+        "notion_create_article_page": 4,
+        "webflow_find_performers": 5,
+        "webflow_create_blog_draft": 5,
+    }
+    active_tools = [t for t in TOOLS if phase_tool_min.get(t["name"], 1) >= replay_from]
+
     start_phase = max(1, replay_from)
     on_event({"type": "phase", "phase": start_phase,
               "label": {1:"Research",2:"Performer Matching",3:"Image Generation",
                         4:"Writing Article",5:"Publishing to Webflow"}.get(start_phase,"Working")})
 
     try:
-        result = _loop(month_label, messages, on_event, check_pause, get_performer_review, run_id, verbose=False)
+        result = _loop(month_label, messages, on_event, check_pause, get_performer_review,
+                       run_id, verbose=False, tools_override=active_tools)
         mem.complete_run(run_id)
         on_event({"type": "history_updated"})
         return result

@@ -198,7 +198,6 @@ def notion_list_performers_in_icpdb(limit: int = 200) -> dict:
     cursor = None
     while has_more and len(all_results) < limit:
         payload: dict[str, Any] = {
-            "filter": {"property": "Performer status", "select": {"equals": "Performing"}},
             "page_size": min(100, limit - len(all_results)),
         }
         if cursor:
@@ -213,11 +212,17 @@ def notion_list_performers_in_icpdb(limit: int = 200) -> dict:
         data = resp.json()
         for page in data.get("results", []):
             props = page.get("properties", {})
-            name_texts = props.get("Contortionist name", {}).get("title", [])
-            name = name_texts[0].get("plain_text", "") if name_texts else ""
+            # Find the title property regardless of its column name
+            name = ""
+            for prop in props.values():
+                if prop.get("type") == "title":
+                    texts = prop.get("title", [])
+                    name = texts[0].get("plain_text", "") if texts else ""
+                    break
             ig_texts = props.get("Instagram", {}).get("rich_text", [])
             instagram = ig_texts[0].get("plain_text", "") if ig_texts else ""
-            all_results.append({"id": page["id"], "name": name, "instagram": instagram, "url": page.get("url", "")})
+            if name:
+                all_results.append({"id": page["id"], "name": name, "instagram": instagram, "url": page.get("url", "")})
         has_more = data.get("has_more", False)
         cursor = data.get("next_cursor")
     return {"performers": all_results}
