@@ -10,7 +10,7 @@ NOTION_BASE = "https://api.notion.com/v1"
 # Collection (data-source) IDs
 NOTION_MONTHLY_POSTS_DS    = "23e3c48a-f297-806a-b2ed-000b34c63f74"   # Monthly performance posts
 NOTION_MONTHLY_RESEARCH_DS = "3293c48a-f297-8010-b5fc-000b5f289537"  # Monthly research
-NOTION_ICPDB_DS            = "3253c48a-f297-80c5-9bdd-000bb269690f"   # ICPDB performers
+NOTION_ICPDB_DS            = "3253c48a-f297-8053-899f-d014af1786ab"   # ICPDB performers
 NOTION_SHOWS_DS            = "3253c48a-f297-805e-9f63-e7672d0ecb35"   # Shows
 
 # ── Webflow ──────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ _overrides: dict = {}
 _DEFAULTS = {
     "NOTION_MONTHLY_POSTS_DS":    NOTION_MONTHLY_POSTS_DS,
     "NOTION_MONTHLY_RESEARCH_DS": NOTION_MONTHLY_RESEARCH_DS,
-    "NOTION_ICPDB_DS":            NOTION_ICPDB_DS,
+    "NOTION_ICPDB_DS":            NOTION_ICPDB_DS,  # 3253c48a-f297-8053-899f-d014af1786ab
     "NOTION_SHOWS_DS":            NOTION_SHOWS_DS,
 }
 
