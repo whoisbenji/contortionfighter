@@ -296,6 +296,32 @@
   .icpdb-sidebar { grid-area: sidebar; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
   .icpdb-main { grid-area: main; display: flex; flex-direction: column; overflow: hidden; }
 
+  /* ── Audit metrics card ── */
+  .audit-metrics-card { background: var(--bg3); border: 1px solid var(--purple-dim); border-radius: var(--radius); overflow: hidden; margin: 4px 0; animation: fadeSlideIn .2s ease; }
+  .audit-metrics-header { display: flex; align-items: center; gap: 16px; padding: 14px 18px; background: rgba(155,77,255,.08); border-bottom: 1px solid var(--border); }
+  .audit-health-score { font-size: 38px; font-weight: 700; font-family: var(--font-mono); line-height: 1; flex-shrink: 0; }
+  .audit-health-score.good { color: var(--green); }
+  .audit-health-score.mid  { color: var(--yellow); }
+  .audit-health-score.low  { color: var(--red); }
+  .audit-health-label { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+  .audit-summary-stats { display: flex; gap: 20px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+  .audit-stat { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+  .audit-stat-val { font-size: 20px; font-weight: 700; font-family: var(--font-mono); color: var(--text); }
+  .audit-stat-lbl { font-size: 10px; color: var(--muted); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .8px; }
+  .audit-fields-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0; }
+  .audit-field-row { display: flex; align-items: center; gap: 10px; padding: 9px 18px; border-bottom: 1px solid rgba(255,255,255,.04); }
+  .audit-field-row:last-child { border-bottom: none; }
+  .audit-field-name { font-size: 12px; color: var(--text); width: 120px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .audit-bar-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .audit-bar-fill { height: 100%; border-radius: 3px; transition: width .6s ease; }
+  .audit-bar-fill.good { background: var(--green); }
+  .audit-bar-fill.mid  { background: var(--yellow); }
+  .audit-bar-fill.low  { background: var(--red); }
+  .audit-field-pct { font-size: 11px; font-family: var(--font-mono); width: 34px; text-align: right; flex-shrink: 0; }
+  .audit-field-pct.good { color: var(--green); }
+  .audit-field-pct.mid  { color: var(--yellow); }
+  .audit-field-pct.low  { color: var(--red); }
+
   /* ── Update review cards (grouped by performer) ── */
   .update-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 10px; }
   .update-performer-header { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; background: rgba(155,77,255,.07); border-bottom: 1px solid var(--border); gap: 10px; }
@@ -1226,6 +1252,9 @@ function handleIcpdbMessage(data) {
     case 'phase_saved':
       addIcpdbEntry('tool-result ok', '💾', `Phase ${data.phase} saved`, 'Output cached.');
       break;
+    case 'audit_metrics':
+      renderAuditMetrics(data);
+      break;
     case 'update_proposals':
       setStatus('paused', 'Awaiting review');
       addIcpdbEntry('paused', '📝', 'Update proposals ready', `${data.proposals.length} proposed change(s) — see below.`);
@@ -1280,6 +1309,63 @@ function handleIcpdbMessage(data) {
       icpdbRunning = false; icpdbRunBtn.disabled = false; icpdbPauseBtn.disabled = true; runBtn.disabled = false;
       break;
   }
+}
+
+// ── Audit metrics card ────────────────────────────────────────────────────────
+function renderAuditMetrics(data) {
+  const score = data.health_score || 0;
+  const scoreClass = score >= 70 ? 'good' : score >= 40 ? 'mid' : 'low';
+  const completeness = data.completeness || {};
+  const needsUpdate = data.performers_needing_update_count || 0;
+  const total = data.total || 0;
+
+  // Sort fields: lowest % first so problem areas are visible
+  const fields = Object.entries(completeness).sort((a, b) => a[1].pct - b[1].pct);
+
+  const fieldRowsHtml = fields.map(([name, stats]) => {
+    const pct = stats.pct || 0;
+    const cls = pct >= 70 ? 'good' : pct >= 40 ? 'mid' : 'low';
+    return `
+      <div class="audit-field-row">
+        <div class="audit-field-name" title="${esc(name)}">${esc(name)}</div>
+        <div class="audit-bar-track">
+          <div class="audit-bar-fill ${cls}" style="width:${pct}%"></div>
+        </div>
+        <div class="audit-field-pct ${cls}">${pct}%</div>
+      </div>`;
+  }).join('');
+
+  const card = document.createElement('div');
+  card.className = 'audit-metrics-card';
+  card.innerHTML = `
+    <div class="audit-metrics-header">
+      <div>
+        <div class="audit-health-score ${scoreClass}">${score}%</div>
+        <div class="audit-health-label">health score</div>
+      </div>
+      <div class="audit-summary-stats">
+        <div class="audit-stat">
+          <div class="audit-stat-val">${total}</div>
+          <div class="audit-stat-lbl">performers</div>
+        </div>
+        <div class="audit-stat">
+          <div class="audit-stat-val" style="color:${needsUpdate > 0 ? 'var(--yellow)' : 'var(--green)'}">${needsUpdate}</div>
+          <div class="audit-stat-lbl">need updates</div>
+        </div>
+        <div class="audit-stat">
+          <div class="audit-stat-val">${fields.length}</div>
+          <div class="audit-stat-lbl">fields tracked</div>
+        </div>
+      </div>
+    </div>
+    <div class="audit-fields-grid">${fieldRowsHtml}</div>`;
+
+  const feed = document.getElementById('icpdb-feed');
+  // Remove empty state if present
+  const empty = feed.querySelector('.empty-state');
+  if (empty) empty.remove();
+  feed.appendChild(card);
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // ── ICPDB Update review panel ─────────────────────────────────────────────────

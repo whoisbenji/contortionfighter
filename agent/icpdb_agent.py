@@ -311,14 +311,17 @@ def _loop(
             result = _dispatch(tool_name, tool_input)
 
             # ── Persist phase outputs ─────────────────────────────────────
-            if tool_name == "icpdb_audit" and "error" not in result and run_id:
-                mem.save_icpdb_phase(run_id, 1, {
-                    "total":                          result.get("total", 0),
-                    "health_score":                   result.get("health_score", 0),
-                    "completeness":                   result.get("completeness", {}),
+            if tool_name == "icpdb_audit" and "error" not in result:
+                audit_data = {
+                    "total":                           result.get("total", 0),
+                    "health_score":                    result.get("health_score", 0),
+                    "completeness":                    result.get("completeness", {}),
                     "performers_needing_update_count": len(result.get("performers_needing_update", [])),
-                })
-                on_event({"type": "phase_saved", "phase": 1})
+                }
+                if run_id:
+                    mem.save_icpdb_phase(run_id, 1, audit_data)
+                    on_event({"type": "phase_saved", "phase": 1})
+                on_event({"type": "audit_metrics", **audit_data})
 
             if tool_name == "notion_update_performer" and "error" not in result and run_id:
                 _updated_fields_total += len(result.get("updated_fields", []))
