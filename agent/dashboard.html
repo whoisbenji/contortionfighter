@@ -358,6 +358,35 @@
   .audit-dupe-names a { color: var(--purple); text-decoration: none; }
   .audit-dupe-names a:hover { text-decoration: underline; }
 
+  /* ── Dedup review panel ── */
+  .dedup-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 10px; }
+  .dedup-card-header { padding: 11px 14px; background: rgba(155,77,255,.07); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dedup-reason-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; }
+  .dedup-reason-text { font-size: 12px; color: var(--text-dim); flex: 1; }
+  .dedup-records { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid var(--border); }
+  .dedup-record { padding: 12px 14px; }
+  .dedup-record + .dedup-record { border-left: 1px solid var(--border); }
+  .dedup-record-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
+  .dedup-record-label.primary   { color: var(--green); }
+  .dedup-record-label.secondary { color: var(--red); }
+  .dedup-record-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .dedup-record-name a { color: var(--text); text-decoration: none; }
+  .dedup-record-name a:hover { color: var(--purple); }
+  .dedup-record-completeness { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+  .dedup-rationale { padding: 10px 14px; font-size: 12px; color: var(--text-dim); border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 7px; }
+  .dedup-rationale-icon { flex-shrink: 0; opacity: .7; }
+  .dedup-actions { padding: 10px 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dedup-action-label { font-size: 11px; color: var(--muted); margin-right: auto; }
+  .dedup-rec-tag { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .dedup-rec-tag.merge     { background: rgba(100,220,120,.15); color: var(--green); }
+  .dedup-rec-tag.keep_both { background: rgba(255,180,0,.12);  color: var(--yellow); }
+  .dedup-btn { padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); background: var(--bg2); color: var(--text); cursor: pointer; transition: all .15s; }
+  .dedup-btn:hover { border-color: var(--purple); color: var(--purple); }
+  .dedup-btn.selected-merge { border-color: var(--green); background: rgba(100,220,120,.12); color: var(--green); }
+  .dedup-btn.selected-skip  { border-color: var(--red);   background: rgba(255,80,80,.10);  color: var(--red); }
+  .dedup-swap-hint { font-size: 11px; color: var(--text-dim); width: 100%; margin-top: 4px; display: none; }
+  .dedup-swap-link { color: var(--purple); cursor: pointer; text-decoration: underline; }
+
   /* ── Update review cards (grouped by performer) ── */
   .update-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 10px; }
   .update-performer-header { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; background: rgba(155,77,255,.07); border-bottom: 1px solid var(--border); gap: 10px; }
@@ -440,6 +469,7 @@
         <div class="agent-card-actions">
           <button class="btn btn-primary" id="ov-run-maintenance-btn">▶ Full Maintenance</button>
           <button class="btn btn-muted" id="ov-audit-btn">Audit Only</button>
+          <button class="btn btn-muted" id="ov-dedup-btn">🔀 Resolve Duplicates</button>
         </div>
       </div>
     </div>
@@ -517,6 +547,7 @@
           <option value="audit_only">Audit Only</option>
           <option value="research_only">Research + Update</option>
           <option value="outreach">Draft Outreach</option>
+          <option value="deduplicate">Resolve Duplicates</option>
         </select>
       </div>
       <div class="sidebar-section">
@@ -565,6 +596,17 @@
       <div id="icpdb-outreach-cards"></div>
       <div class="pr-submit-row">
         <button class="btn btn-muted" id="icpdb-outreach-close">Done</button>
+      </div>
+    </div>
+
+    <!-- Dedup review panel -->
+    <div id="icpdb-dedup-review" class="performer-review-panel" style="display:none">
+      <div class="pr-title">🔀 Resolve Duplicates</div>
+      <div class="pr-subtitle">Review each duplicate group. Approve the agent's recommendation or override it.</div>
+      <div id="icpdb-dedup-cards"></div>
+      <div class="pr-submit-row">
+        <button class="btn btn-success" id="icpdb-dedup-submit">Apply Decisions</button>
+        <button class="btn btn-muted"   id="icpdb-dedup-skip-all">Skip All</button>
       </div>
     </div>
 
@@ -674,6 +716,7 @@ let icpdbRunning = false;
 let icpdbPaused = false;
 let icpdbCurrentPhase = 0;
 let icpdbUpdateDecisions = {};
+let icpdbDedupDecisions  = {};   // group_id → { action: 'merge'|'skip', primary_id, secondary_id }
 let icpdbActiveRunId = null;
 let icpdbHistoryVisible = false;
 
@@ -724,6 +767,10 @@ const icpdbUpdatesRejectAll = document.getElementById('icpdb-updates-reject-all'
 const icpdbOutreachPanel  = document.getElementById('icpdb-outreach-panel');
 const icpdbOutreachCards  = document.getElementById('icpdb-outreach-cards');
 const icpdbOutreachClose  = document.getElementById('icpdb-outreach-close');
+const icpdbDedupReview    = document.getElementById('icpdb-dedup-review');
+const icpdbDedupCards     = document.getElementById('icpdb-dedup-cards');
+const icpdbDedupSubmit    = document.getElementById('icpdb-dedup-submit');
+const icpdbDedupSkipAll   = document.getElementById('icpdb-dedup-skip-all');
 const icpdbHistoryToggle  = document.getElementById('icpdb-history-toggle');
 const icpdbHistoryArrow   = document.getElementById('icpdb-history-arrow');
 const icpdbHistoryList    = document.getElementById('icpdb-history-list');
@@ -839,6 +886,11 @@ document.getElementById('ov-run-maintenance-btn').addEventListener('click', () =
 });
 document.getElementById('ov-audit-btn').addEventListener('click', () => {
   icpdbModeSelect.value = 'audit_only';
+  switchScreen('icpdb');
+  setTimeout(() => startIcpdbRun(), 100);
+});
+document.getElementById('ov-dedup-btn').addEventListener('click', () => {
+  icpdbModeSelect.value = 'deduplicate';
   switchScreen('icpdb');
   setTimeout(() => startIcpdbRun(), 100);
 });
@@ -1267,6 +1319,7 @@ function startIcpdbRun() {
   icpdbPaused = false;
   icpdbUpdateReview.style.display = 'none';
   icpdbOutreachPanel.style.display = 'none';
+  icpdbDedupReview.style.display   = 'none';
 
   icpdbRunBtn.disabled = true;
   icpdbPauseBtn.disabled = false;
@@ -1334,6 +1387,11 @@ function handleIcpdbMessage(data) {
     case 'outreach_drafts':
       addIcpdbEntry('phase-change', '✉️', 'Outreach drafts ready', `${data.drafts.length} draft message(s) — see below.`);
       showOutreachPanel(data.drafts);
+      break;
+    case 'duplicate_proposals':
+      setStatus('paused', 'Awaiting dedup review');
+      addIcpdbEntry('paused', '🔀', 'Duplicate groups ready', `${data.groups.length} group(s) to review — see below.`);
+      showDedupReviewPanel(data.groups);
       break;
     case 'paused':
       icpdbPaused = true;
@@ -1640,6 +1698,138 @@ function showOutreachPanel(drafts) {
 
 icpdbOutreachClose.addEventListener('click', () => {
   icpdbOutreachPanel.style.display = 'none';
+});
+
+// ── ICPDB Dedup review panel ──────────────────────────────────────────────────
+function showDedupReviewPanel(groups) {
+  icpdbDedupDecisions = {};
+  icpdbDedupCards.innerHTML = '';
+
+  groups.forEach(g => {
+    const gid = g.group_id;
+    // Default: follow agent recommendation
+    const isRec = g.recommendation === 'merge';
+    icpdbDedupDecisions[gid] = isRec
+      ? { action: 'merge', primary_id: g.primary_id, secondary_id: g.secondary_id }
+      : { action: 'skip' };
+
+    const badgeCls = g.type === 'exact' ? 'exact' : 'suspected';
+    const badgeLabel = g.type === 'exact' ? 'Exact' : 'Suspected';
+    const recCls   = g.recommendation === 'merge' ? 'merge' : 'keep_both';
+    const recLabel = g.recommendation === 'merge' ? '→ Merge recommended' : '→ Keep both records';
+
+    const primaryNameHtml   = g.primary_url
+      ? `<a href="${esc(g.primary_url)}" target="_blank">${esc(g.primary_name || 'Unknown')}</a>`
+      : esc(g.primary_name || 'Unknown');
+    const secondaryNameHtml = g.secondary_url
+      ? `<a href="${esc(g.secondary_url)}" target="_blank">${esc(g.secondary_name || 'Unknown')}</a>`
+      : esc(g.secondary_name || 'Unknown');
+
+    const card = document.createElement('div');
+    card.className = 'dedup-card';
+    card.id = `dedup-card-${esc(gid)}`;
+    card.innerHTML = `
+      <div class="dedup-card-header">
+        <span class="dedup-reason-badge audit-dupe-badge ${badgeCls}">${badgeLabel}</span>
+        <span class="dedup-reason-text">${esc(g.reason)}</span>
+        <span class="dedup-rec-tag ${recCls}">${esc(recLabel)}</span>
+      </div>
+      <div class="dedup-records">
+        <div class="dedup-record">
+          <div class="dedup-record-label primary">Keep (primary)</div>
+          <div class="dedup-record-name">${primaryNameHtml}</div>
+          <div class="dedup-record-completeness">${esc(g.primary_completeness || '—')}</div>
+        </div>
+        <div class="dedup-record">
+          <div class="dedup-record-label secondary">Archive (secondary)</div>
+          <div class="dedup-record-name">${secondaryNameHtml}</div>
+          <div class="dedup-record-completeness">${esc(g.secondary_completeness || '—')}</div>
+        </div>
+      </div>
+      <div class="dedup-rationale">
+        <span class="dedup-rationale-icon">💡</span>
+        <span>${esc(g.rationale || '')}</span>
+      </div>
+      <div class="dedup-actions">
+        <span class="dedup-action-label">Your decision:</span>
+        <button class="dedup-btn ${isRec ? 'selected-merge' : ''}" data-gid="${esc(gid)}" data-action="merge">✓ Merge</button>
+        <button class="dedup-btn ${!isRec ? 'selected-skip' : ''}"  data-gid="${esc(gid)}" data-action="skip">✕ Skip</button>
+        <div class="dedup-swap-hint" id="dedup-swap-${esc(gid)}">
+          Wrong way round? <span class="dedup-swap-link" data-gid="${esc(gid)}">Swap primary ↔ secondary</span>
+        </div>
+      </div>`;
+
+    // Show swap hint when merge is selected
+    function _updateSwapHint() {
+      const hint = card.querySelector('.dedup-swap-hint');
+      const mergeSelected = icpdbDedupDecisions[gid]?.action === 'merge';
+      hint.style.display = mergeSelected ? 'block' : 'none';
+    }
+
+    card.querySelectorAll('.dedup-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const action = btn.dataset.action;
+        if (action === 'merge') {
+          icpdbDedupDecisions[gid] = { action: 'merge', primary_id: g.primary_id, secondary_id: g.secondary_id };
+        } else {
+          icpdbDedupDecisions[gid] = { action: 'skip' };
+        }
+        card.querySelectorAll('.dedup-btn').forEach(b => {
+          b.classList.remove('selected-merge', 'selected-skip');
+        });
+        btn.classList.add(action === 'merge' ? 'selected-merge' : 'selected-skip');
+        _updateSwapHint();
+      });
+    });
+
+    card.querySelector('.dedup-swap-link').addEventListener('click', () => {
+      const d = icpdbDedupDecisions[gid];
+      if (d?.action === 'merge') {
+        // swap primary ↔ secondary in both the decision and the displayed labels
+        [d.primary_id, d.secondary_id] = [d.secondary_id, d.primary_id];
+        const labels = card.querySelectorAll('.dedup-record-label');
+        labels[0].textContent = 'Keep (primary)';
+        labels[1].textContent = 'Archive (secondary)';
+        const names = card.querySelectorAll('.dedup-record-name');
+        const comps = card.querySelectorAll('.dedup-record-completeness');
+        // swap displayed content
+        const tmpName = names[0].innerHTML; names[0].innerHTML = names[1].innerHTML; names[1].innerHTML = tmpName;
+        const tmpComp = comps[0].innerHTML; comps[0].innerHTML = comps[1].innerHTML; comps[1].innerHTML = tmpComp;
+      }
+    });
+
+    _updateSwapHint();
+    icpdbDedupCards.appendChild(card);
+  });
+
+  icpdbDedupReview.style.display = '';
+  icpdbDedupReview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+icpdbDedupSubmit.addEventListener('click', () => {
+  const decisions = Object.entries(icpdbDedupDecisions).map(([gid, d]) => ({
+    group_id: gid,
+    action: d.action,
+    primary_id: d.primary_id || null,
+    secondary_id: d.secondary_id || null,
+  }));
+  icpdbWs.send(JSON.stringify({ type: 'dedup_decisions', decisions }));
+  icpdbDedupReview.style.display = 'none';
+  addIcpdbEntry('tool-result ok', '🔀', 'Dedup decisions sent', `${decisions.filter(d => d.action === 'merge').length} merge(s) approved.`);
+  setStatus('running', 'ICPDB merging…');
+});
+
+icpdbDedupSkipAll.addEventListener('click', () => {
+  Object.keys(icpdbDedupDecisions).forEach(gid => {
+    icpdbDedupDecisions[gid] = { action: 'skip' };
+  });
+  const decisions = Object.entries(icpdbDedupDecisions).map(([gid, d]) => ({
+    group_id: gid, action: 'skip', primary_id: null, secondary_id: null,
+  }));
+  icpdbWs.send(JSON.stringify({ type: 'dedup_decisions', decisions }));
+  icpdbDedupReview.style.display = 'none';
+  addIcpdbEntry('tool-result ok', '🔀', 'All skipped', 'No records were merged.');
+  setStatus('running', 'ICPDB running…');
 });
 
 // ── ICPDB Pause / interject ───────────────────────────────────────────────────

@@ -16,6 +16,17 @@ to find: bio, nationality, website, verified instagram handle.
 Only record verifiable information. Mark confidence as high/medium/low.
 Do not guess or fabricate.
 
+PHASE 2b — DEDUPLICATION ANALYSIS (only when run_mode is deduplicate)
+When run_mode is deduplicate, instead of Phase 2 research:
+Examine the duplicate groups returned by the audit (both exact and suspected).
+For each group, decide:
+  - recommendation: "merge" if they are clearly the same person, "keep_both" if they are distinct
+  - primary_id: which record to keep (prefer the one with more data filled in)
+  - secondary_id: which record to archive
+  - rationale: explain your reasoning (e.g. "identical name and same Instagram handle", "similar name but different nationalities — likely different people")
+  - primary_completeness / secondary_completeness: brief summary of what each record contains
+Call propose_duplicate_resolutions() with ALL groups at once.
+
 PHASE 3 — REVIEW
 Call propose_performer_updates() with ALL findings from Phase 2 as a single list.
 Each entry: performer_id, performer_name, field, current_value, proposed_value, source, confidence.
@@ -44,6 +55,7 @@ def audit_prompt(run_mode: str = "full", prefs: dict | None = None) -> str:
         "audit_only": "Run Phase 1 (Audit) only. Report findings and stop.",
         "outreach": "Run Phase 1 (Audit) to identify performers needing outreach, then Phase 5 (Outreach) only.",
         "research_only": "Run Phase 1 (Audit), Phase 2 (Research), Phase 3 (Review), Phase 4 (Apply). Skip outreach.",
+        "deduplicate": "Run Phase 1 (Audit) to identify all duplicates, then Phase 2b (Deduplication Analysis) — analyse each duplicate group, form a recommendation, and call propose_duplicate_resolutions() with all groups. After user decisions, Phase 4 (Merge) — call merge_performer_records() for each approved merge.",
     }
     instruction = modes.get(run_mode, modes["full"])
     prompt = f"Please maintain the ICPDB. {instruction}"

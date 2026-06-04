@@ -305,6 +305,8 @@ async def icpdb_websocket_endpoint(ws: WebSocket):
                             pass
                     elif t == "update_decisions":
                         session.update_decisions_inbox.put({"decisions": ctrl.get("decisions", [])})
+                    elif t == "dedup_decisions":
+                        session.update_decisions_inbox.put({"decisions": ctrl.get("decisions", [])})
                 except WebSocketDisconnect:
                     break
 

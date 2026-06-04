@@ -461,3 +461,96 @@ def draft_outreach_messages(
         })
 
     return {"drafts": drafts, "count": len(drafts)}
+
+
+def merge_performer_records(primary_id: str, secondary_id: str) -> dict:
+    """
+    Merge two duplicate performer records in Notion.
+    Copies non-empty fields from secondary into primary (only where primary is empty),
+    then archives the secondary page.
+    Returns dict with ok, merged_fields, primary_id, secondary_id.
+    """
+    # Fetch both pages
+    primary_resp = requests.get(
+        f"{cfg.NOTION_BASE}/pages/{primary_id}",
+        headers=_notion_headers(), timeout=30,
+    )
+    _raise_for(primary_resp)
+    primary_data = primary_resp.json()
+
+    secondary_resp = requests.get(
+        f"{cfg.NOTION_BASE}/pages/{secondary_id}",
+        headers=_notion_headers(), timeout=30,
+    )
+    _raise_for(secondary_resp)
+    secondary_data = secondary_resp.json()
+
+    primary_props   = primary_data.get("properties", {})
+    secondary_props = secondary_data.get("properties", {})
+
+    # Build update payload: fill empty primary fields from secondary
+    properties: dict = {}
+    merged_fields: list[str] = []
+
+    for field, sec_prop in secondary_props.items():
+        if field not in primary_props:
+            continue
+        ptype = sec_prop.get("type", "")
+        if ptype in _SKIP_TYPES or ptype == "title":
+            continue
+        # Only copy if primary is empty and secondary has a value
+        if _has_value(primary_props[field]) or not _has_value(sec_prop):
+            continue
+        val = _prop_value(sec_prop)
+        if not val:
+            continue
+
+        if ptype == "rich_text":
+            properties[field] = {"rich_text": [{"text": {"content": val}}]}
+        elif ptype == "select":
+            properties[field] = {"select": {"name": val}}
+        elif ptype == "multi_select":
+            names = [v.strip() for v in val.split(",") if v.strip()]
+            properties[field] = {"multi_select": [{"name": n} for n in names]}
+        elif ptype == "url":
+            properties[field] = {"url": val}
+        elif ptype == "email":
+            properties[field] = {"email": val}
+        elif ptype == "phone_number":
+            properties[field] = {"phone_number": val}
+        elif ptype == "checkbox":
+            properties[field] = {"checkbox": val.lower() == "true"}
+        elif ptype == "number":
+            try:
+                properties[field] = {"number": float(val)}
+            except ValueError:
+                continue
+        else:
+            continue
+        merged_fields.append(field)
+
+    # Patch primary with merged fields (if any)
+    if properties:
+        patch_resp = requests.patch(
+            f"{cfg.NOTION_BASE}/pages/{primary_id}",
+            headers=_notion_headers(),
+            json={"properties": properties},
+            timeout=30,
+        )
+        _raise_for(patch_resp)
+
+    # Archive the secondary page
+    archive_resp = requests.patch(
+        f"{cfg.NOTION_BASE}/pages/{secondary_id}",
+        headers=_notion_headers(),
+        json={"archived": True},
+        timeout=30,
+    )
+    _raise_for(archive_resp)
+
+    return {
+        "ok": True,
+        "merged_fields": merged_fields,
+        "primary_id": primary_id,
+        "secondary_id": secondary_id,
+    }

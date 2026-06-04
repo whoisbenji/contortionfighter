@@ -17,6 +17,7 @@ from .icpdb_tools import (
     web_search_performer_info,
     notion_update_performer,
     draft_outreach_messages,
+    merge_performer_records,
 )
 from . import memory as mem
 
@@ -136,6 +137,59 @@ ICPDB_TOOLS: list[dict] = [
             "required": ["performers"],
         },
     },
+    {
+        "name": "propose_duplicate_resolutions",
+        "description": (
+            "After auditing and analysing duplicate groups, call this ONCE with ALL "
+            "groups and your recommendation for each. The user will review and decide. "
+            "Returns a decisions list. Call after Phase 1 audit has identified duplicates."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "groups": {
+                    "type": "array",
+                    "description": "All duplicate groups with recommendations.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "group_id":       {"type": "string", "description": "Unique identifier for this group (e.g. 'group_0')."},
+                            "type":           {"type": "string", "description": "exact or suspected"},
+                            "reason":         {"type": "string", "description": "Why they are flagged as duplicates."},
+                            "recommendation": {"type": "string", "description": "merge or keep_both"},
+                            "primary_id":     {"type": "string", "description": "Page ID of the record to keep as primary (required when recommendation=merge)."},
+                            "secondary_id":   {"type": "string", "description": "Page ID of the record to archive (required when recommendation=merge)."},
+                            "primary_name":   {"type": "string", "description": "Name of the primary record."},
+                            "secondary_name": {"type": "string", "description": "Name of the secondary record."},
+                            "primary_url":    {"type": "string", "description": "Notion URL of primary."},
+                            "secondary_url":  {"type": "string", "description": "Notion URL of secondary."},
+                            "rationale":      {"type": "string", "description": "Brief explanation of why this recommendation was made."},
+                            "primary_completeness":   {"type": "string", "description": "Short summary of what fields primary has filled."},
+                            "secondary_completeness": {"type": "string", "description": "Short summary of what fields secondary has filled."},
+                        },
+                        "required": ["group_id", "type", "reason", "recommendation", "rationale"],
+                    },
+                },
+            },
+            "required": ["groups"],
+        },
+    },
+    {
+        "name": "merge_performer_records",
+        "description": (
+            "Merge two duplicate performer pages in Notion. "
+            "Copies non-empty fields from secondary into primary (only where primary is empty), "
+            "then archives the secondary page. Call once per approved merge."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "primary_id":   {"type": "string", "description": "Notion page ID of the record to keep."},
+                "secondary_id": {"type": "string", "description": "Notion page ID of the record to archive."},
+            },
+            "required": ["primary_id", "secondary_id"],
+        },
+    },
 ]
 
 # ── Tool dispatcher ───────────────────────────────────────────────────────────
@@ -145,6 +199,7 @@ TOOL_FUNCTIONS = {
     "web_search_performer_info": web_search_performer_info,
     "notion_update_performer":   notion_update_performer,
     "draft_outreach_messages":   draft_outreach_messages,
+    "merge_performer_records":   merge_performer_records,
 }
 
 # Phase mapping
@@ -154,6 +209,8 @@ TOOL_PHASE_MAP = {
     "propose_performer_updates": (3, "Review"),
     "notion_update_performer":   (4, "Apply"),
     "draft_outreach_messages":   (5, "Outreach"),
+    "propose_duplicate_resolutions": (3, "Review"),
+    "merge_performer_records":        (4, "Merge"),
 }
 
 _NOOP_EVENT   = lambda event: None
@@ -269,6 +326,25 @@ def _loop(
                         "approved_count": approved_count,
                     })
                     on_event({"type": "phase_saved", "phase": 3})
+                result_str = json.dumps(decisions)
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": block.id,
+                    "content":     result_str,
+                })
+                on_event({
+                    "type":   "tool_result",
+                    "tool":   tool_name,
+                    "result": result_str[:500],
+                    "ok":     True,
+                })
+                continue
+
+            # ── propose_duplicate_resolutions: blocking review ────────────
+            if tool_name == "propose_duplicate_resolutions":
+                groups = tool_input.get("groups", [])
+                on_event({"type": "duplicate_proposals", "groups": groups})
+                decisions = get_update_decisions(groups)   # reuse the same queue
                 result_str = json.dumps(decisions)
                 tool_results.append({
                     "type":        "tool_result",
