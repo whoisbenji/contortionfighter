@@ -106,6 +106,102 @@ def get_run(run_id: str) -> dict | None:
     return None
 
 
+# ── ICPDB history ─────────────────────────────────────────────────────────────
+
+ICPDB_HISTORY_FILE = Path(__file__).parent / "icpdb_history.json"
+
+
+def _icpdb_load() -> dict:
+    if ICPDB_HISTORY_FILE.exists():
+        try:
+            return json.loads(ICPDB_HISTORY_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"runs": []}
+
+
+def _icpdb_save(data: dict) -> None:
+    ICPDB_HISTORY_FILE.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def create_icpdb_run(run_mode: str) -> str:
+    data = _icpdb_load()
+    run_id = f"icpdb-{run_mode}-{int(time.time())}"
+    run: dict[str, Any] = {
+        "id":               run_id,
+        "run_mode":         run_mode,
+        "created_at":       time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "completed_at":     None,
+        "status":           "running",
+        "phases_completed": [],
+        "audit":            None,
+        "research":         None,
+        "review":           None,
+        "apply":            None,
+        "outreach":         None,
+        "error":            None,
+    }
+    data["runs"].insert(0, run)
+    _icpdb_save(data)
+    return run_id
+
+
+def _icpdb_update(run_id: str, **kwargs) -> None:
+    data = _icpdb_load()
+    for run in data["runs"]:
+        if run["id"] == run_id:
+            run.update(kwargs)
+            break
+    _icpdb_save(data)
+
+
+_ICPDB_PHASE_KEYS = {1: "audit", 2: "research", 3: "review", 4: "apply", 5: "outreach"}
+
+
+def save_icpdb_phase(run_id: str, phase: int, data: dict) -> None:
+    db = _icpdb_load()
+    for run in db["runs"]:
+        if run["id"] == run_id:
+            if phase not in run["phases_completed"]:
+                run["phases_completed"].append(phase)
+            key = _ICPDB_PHASE_KEYS.get(phase)
+            if key:
+                run[key] = data
+            break
+    _icpdb_save(db)
+
+
+def complete_icpdb_run(run_id: str) -> None:
+    _icpdb_update(run_id, status="completed",
+                  completed_at=time.strftime("%Y-%m-%dT%H:%M:%S"))
+
+
+def fail_icpdb_run(run_id: str, error: str) -> None:
+    _icpdb_update(run_id, status="failed", error=error)
+
+
+def load_icpdb_runs() -> list[dict]:
+    return _icpdb_load().get("runs", [])
+
+
+def get_icpdb_run(run_id: str) -> dict | None:
+    for run in _icpdb_load().get("runs", []):
+        if run["id"] == run_id:
+            return run
+    return None
+
+
+def get_last_icpdb_audit() -> dict | None:
+    """Return audit data from the most recent completed ICPDB run that has it."""
+    for run in _icpdb_load().get("runs", []):
+        if run.get("status") == "completed" and run.get("audit"):
+            return run["audit"]
+    return None
+
+
 def image_url(abs_path: str | None) -> str | None:
     """Convert an output path to a /output/... URL for the dashboard."""
     if not abs_path:

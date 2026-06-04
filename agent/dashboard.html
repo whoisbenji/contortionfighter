@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Contortion Space · Performance Review Agent</title>
+<title>Contortion Space · Agent Dashboard</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -28,6 +28,7 @@
 
   html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 14px; line-height: 1.5; }
 
+  /* ── App shell ── */
   .app {
     display: grid;
     grid-template-rows: 56px 1fr;
@@ -36,8 +37,26 @@
     height: 100vh;
   }
 
+  /* Screen-based layout overrides */
+  .app[data-screen="overview"] {
+    grid-template-columns: 1fr;
+    grid-template-areas: "header" "overview-screen";
+  }
+  .app[data-screen="icpdb"] {
+    grid-template-areas: "header header" "sidebar main";
+  }
+
+  /* Hide irrelevant panels per screen */
+  .app:not([data-screen="review"]) .sidebar,
+  .app:not([data-screen="review"]) .main { display: none !important; }
+
+  .app:not([data-screen="icpdb"]) .icpdb-sidebar,
+  .app:not([data-screen="icpdb"]) .icpdb-main { display: none !important; }
+
+  .app:not([data-screen="overview"]) .overview-screen { display: none !important; }
+
   /* ── Header ── */
-  .header { grid-area: header; display: flex; align-items: center; gap: 12px; padding: 0 24px; background: var(--bg2); border-bottom: 1px solid var(--border); }
+  .header { grid-area: header; display: flex; align-items: center; gap: 12px; padding: 0 24px; background: var(--bg2); border-bottom: 1px solid var(--border); z-index: 10; }
   .header .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
   .header .logo span { color: var(--purple); }
   .header .badge { font-size: 10px; font-family: var(--font-mono); background: var(--purple-dim); color: var(--purple); padding: 2px 8px; border-radius: 999px; letter-spacing: 1px; text-transform: uppercase; }
@@ -52,7 +71,37 @@
   .btn-icon:hover { border-color: var(--purple); color: var(--text); }
   .btn-icon.active { border-color: var(--purple); color: var(--purple); }
 
-  /* ── Sidebar ── */
+  /* ── Nav tabs ── */
+  .header-nav { display: flex; gap: 2px; }
+  .nav-tab { background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 600; padding: 0 16px; height: 56px; transition: all .15s; }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--purple); border-bottom-color: var(--purple); }
+
+  /* ── Overview screen ── */
+  .overview-screen { grid-area: overview-screen; overflow-y: auto; padding: 32px; }
+  .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1200px; }
+  .agent-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .agent-card-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .agent-card-body { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+  .agent-stat { display: flex; justify-content: space-between; font-size: 13px; }
+  .agent-stat-label { color: var(--muted); }
+  .agent-stat-value { font-weight: 600; font-family: var(--font-mono); }
+  .completeness-bar-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .completeness-bar-label { width: 100px; color: var(--muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex-shrink: 0; }
+  .completeness-bar-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .completeness-bar-fill { height: 100%; border-radius: 3px; background: var(--purple); transition: width .5s ease; }
+  .completeness-bar-fill.low  { background: var(--red); }
+  .completeness-bar-fill.mid  { background: var(--yellow); }
+  .completeness-bar-fill.high { background: var(--green); }
+  .completeness-pct { width: 32px; text-align: right; color: var(--muted); font-family: var(--font-mono); }
+  .health-score { font-size: 36px; font-weight: 700; font-family: var(--font-mono); }
+  .health-score.good { color: var(--green); }
+  .health-score.mid  { color: var(--yellow); }
+  .health-score.low  { color: var(--red); }
+  .agent-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .agent-card-actions .btn { width: auto; flex: 1; min-width: 120px; }
+
+  /* ── Sidebar (review screen) ── */
   .sidebar { grid-area: sidebar; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
   .sidebar-scroll { flex: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 20px; }
   .sidebar-scroll::-webkit-scrollbar { width: 4px; }
@@ -121,7 +170,6 @@
   .run-link { font-size: 10px; color: var(--cyan); text-decoration: none; font-family: var(--font-mono); }
   .run-link:hover { text-decoration: underline; }
 
-  /* ── Run card image thumbnails ── */
   .run-thumbs { display: flex; gap: 6px; align-items: flex-start; }
   .run-thumb { display: block; border-radius: 5px; overflow: hidden; border: 1px solid var(--border); flex-shrink: 0; transition: border-color .2s; }
   .run-thumb:hover { border-color: var(--purple); }
@@ -142,7 +190,7 @@
   .gallery-img-card img { display: block; object-fit: cover; }
   .gallery-img-label { font-size: 10px; color: var(--muted); font-family: var(--font-mono); text-align: center; }
 
-  /* ── Main ── */
+  /* ── Main (review screen) ── */
   .main { grid-area: main; display: flex; flex-direction: column; overflow: hidden; }
   .feed { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 8px; scroll-behavior: smooth; }
   .feed::-webkit-scrollbar { width: 6px; }
@@ -243,15 +291,59 @@
   /* replay banner */
   .replay-banner { background: rgba(155,77,255,.12); border-bottom: 1px solid var(--purple-dim); padding: 10px 24px; font-size: 12px; color: var(--purple); font-family: var(--font-mono); display: flex; align-items: center; gap: 10px; }
   .replay-banner strong { color: var(--text); }
+
+  /* ── ICPDB sidebar / main ── */
+  .icpdb-sidebar { grid-area: sidebar; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .icpdb-main { grid-area: main; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Update review cards ── */
+  .update-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; transition: border-color .2s; margin-bottom: 8px; }
+  .update-card.approving { border-color: var(--green); }
+  .update-card.rejecting { opacity: 0.45; }
+  .update-card-top { display: flex; align-items: flex-start; gap: 10px; }
+  .update-card-info { flex: 1; min-width: 0; }
+  .update-performer { font-weight: 700; font-size: 13px; }
+  .update-field { font-size: 11px; color: var(--cyan); font-family: var(--font-mono); margin-top: 2px; }
+  .update-values { font-size: 12px; }
+  .update-current { color: var(--muted); text-decoration: line-through; }
+  .update-arrow { color: var(--muted); margin: 0 6px; }
+  .update-proposed { color: var(--text); font-weight: 600; }
+  .update-source { font-size: 10px; color: var(--muted); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .update-confidence { font-size: 9px; padding: 1px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
+  .update-confidence.high   { background: rgba(77,255,145,.15); color: var(--green); }
+  .update-confidence.medium { background: rgba(255,209,102,.15); color: var(--yellow); }
+  .update-confidence.low    { background: rgba(255,69,96,.15); color: var(--red); }
+  .update-card-btns { display: flex; gap: 6px; flex-shrink: 0; }
+  .uc-btn { padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid; transition: all .15s; }
+  .uc-btn-approve { border-color: var(--green); color: var(--green); background: transparent; }
+  .uc-btn-approve.selected { background: var(--green); color: #0a1a0e; }
+  .uc-btn-reject  { border-color: var(--border); color: var(--muted); background: transparent; }
+  .uc-btn-reject.selected  { background: var(--border); color: var(--text); }
+
+  /* ── Outreach cards ── */
+  .outreach-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+  .outreach-performer { font-weight: 700; font-size: 13px; }
+  .outreach-handle { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+  .outreach-message { font-size: 12px; font-family: var(--font-mono); color: var(--muted); background: var(--bg2); border-radius: 6px; padding: 10px; white-space: pre-wrap; max-height: 80px; overflow: hidden; position: relative; cursor: pointer; }
+  .outreach-message.expanded { max-height: none; }
+  .outreach-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .outreach-btn { font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 5px; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text); transition: all .15s; }
+  .outreach-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+  .outreach-btn.sent { border-color: var(--green); color: var(--green); }
 </style>
 </head>
 <body>
-<div class="app">
+<div class="app" data-screen="overview" id="app">
 
   <!-- Header -->
   <header class="header">
     <div class="logo">Contortion <span>Space</span></div>
-    <div class="badge">Agent</div>
+    <div class="badge">Agents</div>
+    <nav class="header-nav">
+      <button class="nav-tab active" data-screen="overview">Overview</button>
+      <button class="nav-tab" data-screen="review">Performance Review</button>
+      <button class="nav-tab" data-screen="icpdb">ICPDB</button>
+    </nav>
     <div class="header-right">
       <div id="status-dot"></div>
       <span id="status-label">Idle</span>
@@ -260,11 +352,36 @@
     </div>
   </header>
 
-  <!-- Sidebar -->
+  <!-- ── Overview screen ── -->
+  <div class="overview-screen" id="overview-screen">
+    <div class="overview-grid">
+      <!-- Performance Review card -->
+      <div class="agent-card" id="overview-review-card">
+        <div class="agent-card-title">🤸 Performance Review</div>
+        <div class="agent-card-body" id="review-card-body">
+          <div style="color:var(--muted);font-size:12px;font-family:var(--font-mono)">Loading…</div>
+        </div>
+        <div class="agent-card-actions" id="review-card-actions">
+          <button class="btn btn-primary" id="ov-launch-review-btn">▶ Launch Agent</button>
+        </div>
+      </div>
+      <!-- ICPDB card -->
+      <div class="agent-card" id="overview-icpdb-card">
+        <div class="agent-card-title">🗂 ICPDB Maintenance</div>
+        <div class="agent-card-body" id="icpdb-card-body">
+          <div style="color:var(--muted);font-size:12px;font-family:var(--font-mono)">Loading…</div>
+        </div>
+        <div class="agent-card-actions">
+          <button class="btn btn-primary" id="ov-run-maintenance-btn">▶ Full Maintenance</button>
+          <button class="btn btn-muted" id="ov-audit-btn">Audit Only</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Review screen sidebar ── -->
   <aside class="sidebar">
     <div class="sidebar-scroll">
-
-      <!-- New run -->
       <div class="sidebar-section">
         <div class="sidebar-label">Month</div>
         <input type="text" id="month-input" class="month-input" placeholder="e.g. June 2026" />
@@ -273,18 +390,12 @@
         <button id="run-btn" class="btn btn-primary">▶ &nbsp; Run Agent</button>
         <button id="pause-btn" class="btn btn-pause" disabled>⏸ &nbsp; Request Pause</button>
       </div>
-
       <hr class="divider" />
-
-      <!-- Phase progress -->
       <div class="sidebar-section">
         <div class="sidebar-label">Progress</div>
         <div class="phases" id="phase-list"></div>
       </div>
-
       <hr class="divider" />
-
-      <!-- History -->
       <div class="sidebar-section">
         <div class="history-header sidebar-label" id="history-toggle">
           Past Runs <span class="toggle" id="history-arrow">▸</span>
@@ -292,24 +403,20 @@
         <div id="history-list" class="history-list" style="display:none"></div>
         <div id="history-empty" style="display:none; font-size:11px; color:var(--muted)">No runs yet.</div>
       </div>
-
     </div>
   </aside>
 
-  <!-- Main -->
+  <!-- ── Review screen main ── -->
   <main class="main">
     <div id="replay-banner" class="replay-banner" style="display:none">
       ↩ Replaying <strong id="replay-banner-text"></strong>
     </div>
-
     <div class="feed" id="feed">
       <div class="empty-state" id="empty-state">
         <div class="big">🤸</div>
         <p>Enter a month and click <strong>Run Agent</strong> to generate your monthly performance review.<br><br>Or expand <strong>Past Runs</strong> to replay or refine a previous run.</p>
       </div>
     </div>
-
-    <!-- Performer review -->
     <div id="performer-review" style="display:none" class="performer-review-panel">
       <div class="pr-title">👤 Performers not in ICPDB</div>
       <div class="pr-subtitle">Review each performer — Add to ICPDB or Skip. Fill in Instagram handles where known.</div>
@@ -319,13 +426,9 @@
         <button class="btn btn-muted" id="pr-skip-all-btn">Skip All</button>
       </div>
     </div>
-
-    <!-- Gallery panel (hidden by default) -->
     <div class="gallery-panel" id="gallery-panel" style="display:none">
       <div id="gallery-content"></div>
     </div>
-
-    <!-- Interject bar -->
     <div class="interject-bar" id="interject-bar" style="display:none">
       <div class="interject-hint" id="interject-hint">Type a correction or instruction — injected before the next tool call.</div>
       <div class="interject-row">
@@ -335,17 +438,88 @@
     </div>
   </main>
 
+  <!-- ── ICPDB sidebar ── -->
+  <aside class="icpdb-sidebar">
+    <div class="sidebar-scroll">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Run Mode</div>
+        <select id="icpdb-mode-select" class="month-input">
+          <option value="full">Full Maintenance</option>
+          <option value="audit_only">Audit Only</option>
+          <option value="research_only">Research + Update</option>
+          <option value="outreach">Draft Outreach</option>
+        </select>
+      </div>
+      <div class="sidebar-section">
+        <button id="icpdb-run-btn" class="btn btn-primary">▶ Run Agent</button>
+        <button id="icpdb-pause-btn" class="btn btn-pause" disabled>⏸ Request Pause</button>
+      </div>
+      <hr class="divider" />
+      <div class="sidebar-section">
+        <div class="sidebar-label">Progress</div>
+        <div class="phases" id="icpdb-phase-list"></div>
+      </div>
+      <hr class="divider" />
+      <div class="sidebar-section">
+        <div class="sidebar-label history-header" id="icpdb-history-toggle" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between">
+          Past Runs <span id="icpdb-history-arrow">▸</span>
+        </div>
+        <div id="icpdb-history-list" class="history-list" style="display:none"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── ICPDB main ── -->
+  <main class="icpdb-main">
+    <div class="feed" id="icpdb-feed">
+      <div class="empty-state" id="icpdb-empty-state">
+        <div class="big">🗂</div>
+        <p>Select a run mode and click <strong>Run Agent</strong> to maintain the ICPDB.</p>
+      </div>
+    </div>
+
+    <!-- Update review panel -->
+    <div id="icpdb-update-review" class="performer-review-panel" style="display:none">
+      <div class="pr-title">📝 Proposed Updates</div>
+      <div class="pr-subtitle">Review each proposed change. Approve or reject individually.</div>
+      <div id="icpdb-update-cards"></div>
+      <div class="pr-submit-row">
+        <button class="btn btn-success" id="icpdb-updates-submit">Apply Approved</button>
+        <button class="btn btn-muted" id="icpdb-updates-reject-all">Reject All</button>
+      </div>
+    </div>
+
+    <!-- Outreach drafts panel -->
+    <div id="icpdb-outreach-panel" class="performer-review-panel" style="display:none">
+      <div class="pr-title">✉️ Outreach Drafts</div>
+      <div class="pr-subtitle">Review and send these messages manually. Click links to open.</div>
+      <div id="icpdb-outreach-cards"></div>
+      <div class="pr-submit-row">
+        <button class="btn btn-muted" id="icpdb-outreach-close">Done</button>
+      </div>
+    </div>
+
+    <!-- Interject bar -->
+    <div class="interject-bar" id="icpdb-interject-bar" style="display:none">
+      <div class="interject-hint" id="icpdb-interject-hint">Type a correction or instruction — injected before the next tool call.</div>
+      <div class="interject-row">
+        <textarea id="icpdb-interject-input" class="interject-input" rows="1" placeholder="Add a note or correction…"></textarea>
+        <button id="icpdb-send-btn" class="btn-send">Send</button>
+      </div>
+    </div>
+  </main>
+
 </div>
 
-<!-- Admin overlay -->
+<!-- Admin overlay (global) -->
 <div class="admin-overlay" id="admin-overlay" style="display:none">
   <div class="admin-panel">
     <h2>⚙️ Admin Settings</h2>
     <p>Override the Notion database IDs. Leave blank to use the defaults. Changes apply from the next run.</p>
     <hr class="admin-divider" />
-    <div class="admin-field"><label>Monthly Research DB</label><input type="text" id="admin-research-db" placeholder="Default: 3293c48a-f297-8058-b4dd-f0c11fe818a8" /></div>
-    <div class="admin-field"><label>Monthly Posts DB</label><input type="text" id="admin-posts-db" placeholder="Default: 23e3c48a-f297-80a6-9e58-f787056ac2cb" /></div>
-    <div class="admin-field"><label>Performers DB (ICPDB)</label><input type="text" id="admin-icpdb" placeholder="Default: 3253c48a-f297-8053-899f-d014af1786ab" /></div>
+    <div class="admin-field"><label>Monthly Research DB</label><input type="text" id="admin-research-db" placeholder="Default: 3293c48a-f297-8010-b5fc-000b5f289537" /></div>
+    <div class="admin-field"><label>Monthly Posts DB</label><input type="text" id="admin-posts-db" placeholder="Default: 23e3c48a-f297-806a-b2ed-000b34c63f74" /></div>
+    <div class="admin-field"><label>Performers DB (ICPDB)</label><input type="text" id="admin-icpdb" placeholder="Default: 3253c48a-f297-80c5-9bdd-000bb269690f" /></div>
     <div class="admin-field"><label>Shows DB</label><input type="text" id="admin-shows-db" placeholder="Default: 3253c48a-f297-805e-9f63-e7672d0ecb35" /></div>
     <div class="admin-actions">
       <button class="btn btn-muted" id="admin-reset-btn">Reset to Defaults</button>
@@ -365,6 +539,14 @@ const PHASES = [
 ];
 const PHASE_LABELS = {1:"Research",2:"Performer Matching",3:"Image Generation",4:"Writing Article",5:"Publishing to Webflow"};
 
+const ICPDB_PHASES = [
+  {id: 1, label: "Audit"},
+  {id: 2, label: "Research"},
+  {id: 3, label: "Review"},
+  {id: 4, label: "Apply"},
+  {id: 5, label: "Outreach"},
+];
+
 const ADMIN_KEYS = [
   { field: 'admin-research-db', key: 'NOTION_MONTHLY_RESEARCH_DS' },
   { field: 'admin-posts-db',    key: 'NOTION_MONTHLY_POSTS_DS' },
@@ -377,6 +559,8 @@ const TOOL_ICONS = {
   notion_search_performer:'🔎', notion_create_performer:'➕', request_performer_review:'👤',
   notion_list_shows:'🎪', notion_search_show:'🎪', notion_create_article_page:'✍️',
   generate_images:'🖼', webflow_find_performers:'🔗', webflow_create_blog_draft:'🚀',
+  icpdb_audit:'🔍', web_search_performer_info:'🌐', propose_performer_updates:'📝',
+  notion_update_performer:'✏️', draft_outreach_messages:'✉️',
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -388,7 +572,16 @@ let reviewDecisions = {};
 let activeRunId = null;
 let historyVisible = false;
 
+let icpdbWs = null;
+let icpdbRunning = false;
+let icpdbPaused = false;
+let icpdbCurrentPhase = 0;
+let icpdbUpdateDecisions = {};
+let icpdbActiveRunId = null;
+let icpdbHistoryVisible = false;
+
 // ── DOM ───────────────────────────────────────────────────────────────────────
+const appEl           = document.getElementById('app');
 const monthInput      = document.getElementById('month-input');
 const runBtn          = document.getElementById('run-btn');
 const pauseBtn        = document.getElementById('pause-btn');
@@ -406,7 +599,6 @@ const adminOverlay    = document.getElementById('admin-overlay');
 const galleryBtn      = document.getElementById('gallery-btn');
 const galleryPanel    = document.getElementById('gallery-panel');
 const galleryContent  = document.getElementById('gallery-content');
-const feedEl          = document.getElementById('feed');
 const performerReview = document.getElementById('performer-review');
 const performerCards  = document.getElementById('performer-cards');
 const prSubmitBtn     = document.getElementById('pr-submit-btn');
@@ -418,13 +610,139 @@ const historyEmpty    = document.getElementById('history-empty');
 const replayBanner    = document.getElementById('replay-banner');
 const replayBannerText = document.getElementById('replay-banner-text');
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-buildPhaseList();
-const now = new Date();
-monthInput.value = now.toLocaleString('default', { month: 'long' }) + ' ' + now.getFullYear();
-loadAdminFields();
+const icpdbFeed        = document.getElementById('icpdb-feed');
+const icpdbEmptyState  = document.getElementById('icpdb-empty-state');
+const icpdbRunBtn      = document.getElementById('icpdb-run-btn');
+const icpdbPauseBtn    = document.getElementById('icpdb-pause-btn');
+const icpdbModeSelect  = document.getElementById('icpdb-mode-select');
+const icpdbPhaseList   = document.getElementById('icpdb-phase-list');
+const icpdbInterjectBar   = document.getElementById('icpdb-interject-bar');
+const icpdbInterjectInput = document.getElementById('icpdb-interject-input');
+const icpdbInterjectHint  = document.getElementById('icpdb-interject-hint');
+const icpdbSendBtn        = document.getElementById('icpdb-send-btn');
+const icpdbUpdateReview   = document.getElementById('icpdb-update-review');
+const icpdbUpdateCards    = document.getElementById('icpdb-update-cards');
+const icpdbUpdatesSubmit  = document.getElementById('icpdb-updates-submit');
+const icpdbUpdatesRejectAll = document.getElementById('icpdb-updates-reject-all');
+const icpdbOutreachPanel  = document.getElementById('icpdb-outreach-panel');
+const icpdbOutreachCards  = document.getElementById('icpdb-outreach-cards');
+const icpdbOutreachClose  = document.getElementById('icpdb-outreach-close');
+const icpdbHistoryToggle  = document.getElementById('icpdb-history-toggle');
+const icpdbHistoryArrow   = document.getElementById('icpdb-history-arrow');
+const icpdbHistoryList    = document.getElementById('icpdb-history-list');
 
-// ── Phase list ────────────────────────────────────────────────────────────────
+// ── Utility ───────────────────────────────────────────────────────────────────
+function esc(str) {
+  if (typeof str !== 'string') str = JSON.stringify(str, null, 2);
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchScreen(tab.dataset.screen));
+});
+
+function switchScreen(screen) {
+  appEl.dataset.screen = screen;
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.screen === screen));
+  if (screen === 'overview') loadOverview();
+  if (screen === 'icpdb') { loadIcpdbHistory(); buildIcpdbPhaseList(); }
+  if (screen === 'review') { buildPhaseList(); }
+}
+
+// ── Status ────────────────────────────────────────────────────────────────────
+function setStatus(state, label) {
+  statusDot.className = state;
+  statusLabel.textContent = label;
+}
+
+// ── Overview screen ───────────────────────────────────────────────────────────
+async function loadOverview() {
+  // Performance review
+  try {
+    const runs = await fetch('/api/history').then(r => r.json());
+    renderReviewCard(runs[0] || null);
+  } catch { renderReviewCard(null); }
+
+  // ICPDB stats
+  try {
+    const stats = await fetch('/api/icpdb/stats').then(r => r.json());
+    renderIcpdbCard(stats);
+  } catch { renderIcpdbCard(null); }
+}
+
+function renderReviewCard(run) {
+  const body = document.getElementById('review-card-body');
+  if (!run) {
+    body.innerHTML = '<div class="agent-stat"><span class="agent-stat-label">No runs yet</span></div>';
+    return;
+  }
+  const date = run.created_at ? run.created_at.replace('T', ' ').slice(0, 16) : '';
+  const phases = run.phases_completed || [];
+  const links = [];
+  if (run.research?.notion_url)  links.push(`<a class="run-link" href="${run.research.notion_url}" target="_blank">📋 Research</a>`);
+  if (run.article?.notion_url)   links.push(`<a class="run-link" href="${run.article.notion_url}" target="_blank">✍️ Article</a>`);
+  if (run.webflow?.draft_url)    links.push(`<a class="run-link" href="${run.webflow.draft_url}" target="_blank">🚀 Draft</a>`);
+  body.innerHTML = `
+    <div class="agent-stat"><span class="agent-stat-label">Last run</span><span class="agent-stat-value">${esc(run.month_label || '—')}</span></div>
+    <div class="agent-stat"><span class="agent-stat-label">Status</span><span class="run-status ${run.status}">${run.status}</span></div>
+    <div class="agent-stat"><span class="agent-stat-label">Date</span><span class="agent-stat-value">${esc(date)}</span></div>
+    <div class="agent-stat"><span class="agent-stat-label">Phases</span><span class="agent-stat-value">${phases.length}/5</span></div>
+    ${links.length ? `<div class="run-links">${links.join('')}</div>` : ''}`;
+}
+
+function renderIcpdbCard(stats) {
+  const body = document.getElementById('icpdb-card-body');
+  if (!stats || !stats.last_audit) {
+    body.innerHTML = '<div class="agent-stat"><span class="agent-stat-label">No audit yet — run maintenance to get started.</span></div>';
+    return;
+  }
+  const a = stats.last_audit;
+  const hs = a.health_score || 0;
+  const hsCls = hs >= 75 ? 'good' : hs >= 50 ? 'mid' : 'low';
+
+  // Top 5 most incomplete fields
+  const completeness = a.completeness || {};
+  const fields = Object.entries(completeness)
+    .sort((x, y) => x[1].pct - y[1].pct)
+    .slice(0, 5);
+
+  const bars = fields.map(([name, info]) => {
+    const pct = info.pct || 0;
+    const cls = pct >= 75 ? 'high' : pct >= 40 ? 'mid' : 'low';
+    return `<div class="completeness-bar-row">
+      <div class="completeness-bar-label" title="${esc(name)}">${esc(name)}</div>
+      <div class="completeness-bar-track"><div class="completeness-bar-fill ${cls}" style="width:${pct}%"></div></div>
+      <div class="completeness-pct">${pct}%</div>
+    </div>`;
+  }).join('');
+
+  const lastRunDate = stats.last_run?.created_at ? stats.last_run.created_at.replace('T',' ').slice(0,10) : '—';
+  body.innerHTML = `
+    <div style="display:flex;align-items:baseline;gap:12px">
+      <div class="health-score ${hsCls}">${hs}%</div>
+      <div style="font-size:12px;color:var(--muted)">health score</div>
+    </div>
+    <div class="agent-stat"><span class="agent-stat-label">Total performers</span><span class="agent-stat-value">${a.total || 0}</span></div>
+    <div class="agent-stat"><span class="agent-stat-label">Last audit</span><span class="agent-stat-value">${esc(lastRunDate)}</span></div>
+    ${bars ? `<div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">${bars}</div>` : ''}`;
+}
+
+document.getElementById('ov-launch-review-btn').addEventListener('click', () => {
+  switchScreen('review');
+});
+document.getElementById('ov-run-maintenance-btn').addEventListener('click', () => {
+  icpdbModeSelect.value = 'full';
+  switchScreen('icpdb');
+  setTimeout(() => startIcpdbRun(), 100);
+});
+document.getElementById('ov-audit-btn').addEventListener('click', () => {
+  icpdbModeSelect.value = 'audit_only';
+  switchScreen('icpdb');
+  setTimeout(() => startIcpdbRun(), 100);
+});
+
+// ── Phase list (review) ───────────────────────────────────────────────────────
 function buildPhaseList() {
   phaseList.innerHTML = '';
   PHASES.forEach(p => {
@@ -454,42 +772,40 @@ function markAllDone() {
   });
 }
 
-// ── Status ────────────────────────────────────────────────────────────────────
-function setStatus(state, label) {
-  statusDot.className = state;
-  statusLabel.textContent = label;
-}
-
-// ── Feed ──────────────────────────────────────────────────────────────────────
-function addEntry(cls, icon, title, body, collapsible = false) {
-  emptyState && (emptyState.style.display = 'none');
+// ── Feed helpers ──────────────────────────────────────────────────────────────
+function addEntry(feedEl, cls, icon, title, body, collapsible = false) {
+  const es = feedEl.querySelector('.empty-state');
+  if (es) es.style.display = 'none';
   const entry = document.createElement('div');
   entry.className = `entry ${cls}`;
   const bodyHtml = collapsible
     ? `<div class="entry-text collapsed expandable" onclick="this.classList.toggle('collapsed')">${esc(body)}</div>`
     : `<div class="entry-text">${esc(body)}</div>`;
   entry.innerHTML = `<div class="entry-icon">${icon}</div><div class="entry-body">${title ? `<div class="entry-tool">${esc(title)}</div>` : ''}${bodyHtml}</div>`;
-  const last = feed.lastElementChild;
+  const last = feedEl.lastElementChild;
   if (last && last.classList.contains('thinking')) last.remove();
-  feed.appendChild(entry);
-  feed.scrollTop = feed.scrollHeight;
+  feedEl.appendChild(entry);
+  feedEl.scrollTop = feedEl.scrollHeight;
 }
 
-function addThinking() {
-  if (feed.lastElementChild?.classList.contains('thinking')) return;
+function addThinking(feedEl) {
+  if (feedEl.lastElementChild?.classList.contains('thinking')) return;
   const e = document.createElement('div');
   e.className = 'entry thinking';
   e.innerHTML = `<div class="entry-icon">🧠</div><div class="entry-body"><div class="entry-text"><span class="dots">Thinking</span></div></div>`;
-  feed.appendChild(e);
-  feed.scrollTop = feed.scrollHeight;
+  feedEl.appendChild(e);
+  feedEl.scrollTop = feedEl.scrollHeight;
 }
 
-function esc(str) {
-  if (typeof str !== 'string') str = JSON.stringify(str, null, 2);
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// Wrappers for review screen
+function addFeedEntry(cls, icon, title, body, collapsible) { addEntry(feed, cls, icon, title, body, collapsible); }
+function addFeedThinking() { addThinking(feed); }
 
-// ── History ───────────────────────────────────────────────────────────────────
+// Wrappers for ICPDB screen
+function addIcpdbEntry(cls, icon, title, body, collapsible) { addEntry(icpdbFeed, cls, icon, title, body, collapsible); }
+function addIcpdbThinking() { addThinking(icpdbFeed); }
+
+// ── History (review) ──────────────────────────────────────────────────────────
 historyToggle.addEventListener('click', () => {
   historyVisible = !historyVisible;
   historyListEl.style.display = historyVisible ? 'flex' : 'none';
@@ -522,19 +838,16 @@ function buildRunCard(run) {
   const date = run.created_at ? run.created_at.replace('T', ' ').slice(0, 16) : '';
   const phases = run.phases_completed || [];
 
-  // Replay buttons for each completed phase (except phase 1 — replay from 2+)
   const replayBtns = [2,3,4,5]
     .filter(p => phases.includes(p - 1) || phases.includes(p))
     .map(p => `<button class="replay-btn" data-run="${run.id}" data-month="${esc(run.month_label)}" data-phase="${p}">↩ From Phase ${p}: ${PHASE_LABELS[p]}</button>`)
     .join('');
 
-  // Links
   const links = [];
   if (run.research?.notion_url)  links.push(`<a class="run-link" href="${run.research.notion_url}" target="_blank">📋 Research</a>`);
   if (run.article?.notion_url)   links.push(`<a class="run-link" href="${run.article.notion_url}" target="_blank">✍️ Article</a>`);
   if (run.webflow?.draft_url)    links.push(`<a class="run-link" href="${run.webflow.draft_url}" target="_blank">🚀 Draft</a>`);
 
-  // Image thumbnails
   const thumbsHtml = (run.story_url || run.header_url) ? `
     <div class="run-thumbs">
       ${run.story_url  ? `<a class="run-thumb story"  href="${run.story_url}"  target="_blank"><img src="${run.story_url}"  alt="Story" /></a>` : ''}
@@ -561,26 +874,19 @@ function buildRunCard(run) {
       </div>
     </div>`;
 
-  // Toggle body
   card.querySelector('.run-header').addEventListener('click', () => {
     const body = document.getElementById(`run-body-${run.id}`);
     body.style.display = body.style.display === 'none' ? 'flex' : 'none';
     body.style.flexDirection = 'column';
   });
 
-  // Replay buttons
   card.querySelectorAll('.replay-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      startRun({
-        month: btn.dataset.month,
-        replayFrom: parseInt(btn.dataset.phase),
-        replayRunId: btn.dataset.run,
-      });
+      startRun({ month: btn.dataset.month, replayFrom: parseInt(btn.dataset.phase), replayRunId: btn.dataset.run });
     });
   });
 
-  // Feedback save
   card.querySelector('.feedback-save').addEventListener('click', async (e) => {
     e.stopPropagation();
     const text = document.getElementById(`fb-${run.id}`).value;
@@ -596,7 +902,7 @@ function buildRunCard(run) {
   return card;
 }
 
-// ── Run agent ─────────────────────────────────────────────────────────────────
+// ── Run agent (review) ────────────────────────────────────────────────────────
 runBtn.addEventListener('click', () => {
   const month = monthInput.value.trim();
   if (!month) { monthInput.focus(); return; }
@@ -604,6 +910,7 @@ runBtn.addEventListener('click', () => {
 });
 
 function startRun({ month, replayFrom = 1, replayRunId = null }) {
+  if (icpdbRunning) return;
   feed.innerHTML = '';
   buildPhaseList();
   currentPhase = 0;
@@ -613,6 +920,7 @@ function startRun({ month, replayFrom = 1, replayRunId = null }) {
 
   runBtn.disabled = true;
   pauseBtn.disabled = false;
+  icpdbRunBtn.disabled = true;
   interjectBar.style.display = '';
   interjectInput.value = '';
   interjectInput.className = 'interject-input';
@@ -632,75 +940,56 @@ function startRun({ month, replayFrom = 1, replayRunId = null }) {
 
   ws.onopen = () => {
     setStatus('running', 'Starting…');
-    ws.send(JSON.stringify({
-      type: 'start',
-      month,
-      db_config: getDbConfig(),
-      replay_from: replayFrom,
-      replay_run_id: replayRunId,
-    }));
+    ws.send(JSON.stringify({ type: 'start', month, db_config: getDbConfig(), replay_from: replayFrom, replay_run_id: replayRunId }));
   };
-
   ws.onmessage = e => { try { handleMessage(JSON.parse(e.data)); } catch {} };
-
   ws.onerror = () => {
     setStatus('error', 'Connection error');
-    addEntry('error-entry', '⚠', 'WebSocket Error', 'Could not connect.\n\n  uvicorn agent.server:app --port 8765');
-    runBtn.disabled = false; pauseBtn.disabled = true;
+    addFeedEntry('error-entry', '⚠', 'WebSocket Error', 'Could not connect.\n\n  uvicorn agent.server:app --port 8765');
+    runBtn.disabled = false; icpdbRunBtn.disabled = false; pauseBtn.disabled = true;
   };
-
   ws.onclose = () => {
     if (agentRunning) {
       setStatus('error', 'Disconnected');
-      addEntry('error-entry', '⚠', 'Disconnected', 'Server closed the connection unexpectedly.');
-      agentRunning = false; runBtn.disabled = false; pauseBtn.disabled = true;
+      addFeedEntry('error-entry', '⚠', 'Disconnected', 'Server closed the connection unexpectedly.');
+      agentRunning = false; runBtn.disabled = false; icpdbRunBtn.disabled = false; pauseBtn.disabled = true;
     }
   };
 }
 
-// ── Message handler ───────────────────────────────────────────────────────────
+// ── Message handler (review) ──────────────────────────────────────────────────
 function handleMessage(data) {
   switch (data.type) {
-    case 'run_id':
-      activeRunId = data.run_id;
-      break;
-
+    case 'run_id': activeRunId = data.run_id; break;
     case 'started':
-      addEntry('phase-change', '▶', 'Started', `Running agent for ${data.month}${data.replay_from > 1 ? ` (from Phase ${data.replay_from})` : ''}`);
+      addFeedEntry('phase-change', '▶', 'Started', `Running agent for ${data.month}${data.replay_from > 1 ? ` (from Phase ${data.replay_from})` : ''}`);
       break;
-
-    case 'thinking': addThinking(); break;
-
+    case 'thinking': addFeedThinking(); break;
     case 'phase':
       setPhase(data.phase);
-      addEntry('phase-change', '📍', `Phase ${data.phase}`, data.label);
+      addFeedEntry('phase-change', '📍', `Phase ${data.phase}`, data.label);
       setStatus('running', data.label);
       break;
-
     case 'tool_call': {
       const icon = TOOL_ICONS[data.tool] || '🔧';
-      addEntry('tool-call', icon, data.tool, typeof data.input === 'string' ? data.input : JSON.stringify(data.input, null, 2), true);
+      addFeedEntry('tool-call', icon, data.tool, typeof data.input === 'string' ? data.input : JSON.stringify(data.input, null, 2), true);
       break;
     }
-
     case 'tool_result':
-      addEntry(data.ok ? 'tool-result ok' : 'tool-result err', data.ok ? '✓' : '✕', data.tool + ' → result', data.result, true);
+      addFeedEntry(data.ok ? 'tool-result ok' : 'tool-result err', data.ok ? '✓' : '✕', data.tool + ' → result', data.result, true);
       break;
-
     case 'phase_saved':
-      addEntry('tool-result ok', '💾', `Phase ${data.phase} saved`, 'Phase output cached for replay.');
+      addFeedEntry('tool-result ok', '💾', `Phase ${data.phase} saved`, 'Phase output cached for replay.');
       break;
-
     case 'performer_review':
       setStatus('paused', 'Awaiting review');
-      addEntry('paused', '👤', 'Performer review needed', `${data.performers.length} performer(s) not found in ICPDB — see below.`);
+      addFeedEntry('paused', '👤', 'Performer review needed', `${data.performers.length} performer(s) not found in ICPDB — see below.`);
       showPerformerReview(data.performers);
       break;
-
     case 'paused':
       agentPaused = true;
       setStatus('paused', 'Paused');
-      addEntry('paused', '⏸', 'Agent Paused', data.message);
+      addFeedEntry('paused', '⏸', 'Agent Paused', data.message);
       interjectHint.textContent = 'Agent paused. Type your correction and click Send to resume.';
       interjectHint.className = 'interject-hint paused-hint';
       interjectInput.className = 'interject-input paused';
@@ -708,46 +997,40 @@ function handleMessage(data) {
       sendBtn.textContent = 'Resume';
       pauseBtn.disabled = true;
       break;
-
     case 'resumed':
       agentPaused = false;
       setStatus('running', 'Resuming…');
-      addEntry('resumed', '▶', 'Resumed', data.message ? `With note: "${data.message}"` : 'Agent resumed.');
+      addFeedEntry('resumed', '▶', 'Resumed', data.message ? `With note: "${data.message}"` : 'Agent resumed.');
       interjectHint.textContent = 'Type a correction or instruction — injected before the next tool call.';
       interjectHint.className = 'interject-hint';
       interjectInput.className = 'interject-input';
       sendBtn.textContent = 'Send';
       pauseBtn.disabled = false;
       break;
-
     case 'injected':
-      addEntry('injected', '💬', 'Your note injected', data.message);
+      addFeedEntry('injected', '💬', 'Your note injected', data.message);
       break;
-
     case 'summary':
-      addEntry('summary', '✅', 'Complete', data.text);
+      addFeedEntry('summary', '✅', 'Complete', data.text);
       break;
-
     case 'history_updated':
       if (historyVisible) fetchHistory();
       break;
-
     case 'done':
       agentRunning = false; agentPaused = false;
       markAllDone();
       setStatus('done', 'Done');
-      runBtn.disabled = false; pauseBtn.disabled = true;
+      runBtn.disabled = false; pauseBtn.disabled = true; icpdbRunBtn.disabled = false;
       interjectBar.style.display = 'none';
       performerReview.style.display = 'none';
       replayBanner.style.display = 'none';
-      addEntry('phase-change', '🎉', 'All done', 'Review your draft in Webflow and check the output folder for images.');
+      addFeedEntry('phase-change', '🎉', 'All done', 'Review your draft in Webflow and check the output folder for images.');
       if (historyVisible) fetchHistory();
       break;
-
     case 'error':
       setStatus('error', 'Error');
-      addEntry('error-entry', '⚠', 'Error', data.message);
-      agentRunning = false; runBtn.disabled = false; pauseBtn.disabled = true;
+      addFeedEntry('error-entry', '⚠', 'Error', data.message);
+      agentRunning = false; runBtn.disabled = false; pauseBtn.disabled = true; icpdbRunBtn.disabled = false;
       break;
   }
 }
@@ -775,7 +1058,6 @@ function showPerformerReview(performers) {
         <label>@</label>
         <input type="text" placeholder="instagram handle (no @)" data-name="${esc(p.name)}" value="${esc(p.instagram || '')}" />
       </div>`;
-
     card.querySelectorAll('.pc-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const name = btn.dataset.name;
@@ -801,7 +1083,7 @@ function submitPerformerDecisions() {
   }));
   ws.send(JSON.stringify({ type: 'performer_decisions', decisions }));
   performerReview.style.display = 'none';
-  addEntry('injected', '👤', 'Performer decisions sent',
+  addFeedEntry('injected', '👤', 'Performer decisions sent',
     decisions.map(d => `${d.action==='add'?'➕':'⏭'} ${d.name}${d.instagram?` (@${d.instagram})`:''}`).join('\n'));
 }
 
@@ -811,11 +1093,11 @@ prSkipAllBtn.addEventListener('click', () => {
   submitPerformerDecisions();
 });
 
-// ── Pause / interject ─────────────────────────────────────────────────────────
+// ── Pause / interject (review) ────────────────────────────────────────────────
 pauseBtn.addEventListener('click', () => {
   if (!ws || !agentRunning) return;
   ws.send(JSON.stringify({ type: 'pause' }));
-  addEntry('injected', '⏸', 'Pause requested', 'Agent will pause before the next tool call.');
+  addFeedEntry('injected', '⏸', 'Pause requested', 'Agent will pause before the next tool call.');
   pauseBtn.disabled = true;
 });
 
@@ -827,7 +1109,7 @@ function sendInterject() {
   } else {
     if (!msg) return;
     ws.send(JSON.stringify({ type: 'interject', message: msg }));
-    addEntry('injected', '💬', 'Note queued', msg);
+    addFeedEntry('injected', '💬', 'Note queued', msg);
   }
   interjectInput.value = '';
 }
@@ -840,6 +1122,343 @@ interjectInput.addEventListener('input', () => {
   interjectInput.style.height = 'auto';
   interjectInput.style.height = Math.min(interjectInput.scrollHeight, 120) + 'px';
 });
+
+// ── ICPDB Phase list ──────────────────────────────────────────────────────────
+function buildIcpdbPhaseList() {
+  icpdbPhaseList.innerHTML = '';
+  ICPDB_PHASES.forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'phase-item';
+    el.id = `icpdb-phase-${p.id}`;
+    el.innerHTML = `<div class="phase-dot"></div><div class="phase-name">${p.label}</div>`;
+    icpdbPhaseList.appendChild(el);
+  });
+}
+
+function setIcpdbPhase(id) {
+  if (id === icpdbCurrentPhase) return;
+  if (icpdbCurrentPhase > 0) {
+    const prev = document.getElementById(`icpdb-phase-${icpdbCurrentPhase}`);
+    if (prev) prev.className = 'phase-item done';
+  }
+  icpdbCurrentPhase = id;
+  const el = document.getElementById(`icpdb-phase-${id}`);
+  if (el) el.className = 'phase-item active';
+}
+
+function markIcpdbAllDone() {
+  ICPDB_PHASES.forEach(p => {
+    const el = document.getElementById(`icpdb-phase-${p.id}`);
+    if (el) el.className = 'phase-item done';
+  });
+}
+
+// ── ICPDB Run ─────────────────────────────────────────────────────────────────
+icpdbRunBtn.addEventListener('click', () => startIcpdbRun());
+
+function startIcpdbRun() {
+  if (agentRunning) return;
+  const mode = icpdbModeSelect.value;
+  icpdbFeed.innerHTML = '';
+  buildIcpdbPhaseList();
+  icpdbCurrentPhase = 0;
+  icpdbRunning = true;
+  icpdbPaused = false;
+  icpdbUpdateReview.style.display = 'none';
+  icpdbOutreachPanel.style.display = 'none';
+
+  icpdbRunBtn.disabled = true;
+  icpdbPauseBtn.disabled = false;
+  runBtn.disabled = true;
+  icpdbInterjectBar.style.display = '';
+  icpdbInterjectInput.value = '';
+  icpdbInterjectInput.className = 'interject-input';
+  icpdbSendBtn.textContent = 'Send';
+  setStatus('running', 'ICPDB starting…');
+
+  const wsUrl = `ws://${location.host}/ws/icpdb`;
+  icpdbWs = new WebSocket(wsUrl);
+
+  icpdbWs.onopen = () => {
+    setStatus('running', 'ICPDB running…');
+    icpdbWs.send(JSON.stringify({ type: 'start', run_mode: mode }));
+  };
+  icpdbWs.onmessage = e => { try { handleIcpdbMessage(JSON.parse(e.data)); } catch {} };
+  icpdbWs.onerror = () => {
+    setStatus('error', 'Connection error');
+    addIcpdbEntry('error-entry', '⚠', 'WebSocket Error', 'Could not connect to ICPDB agent.');
+    icpdbRunBtn.disabled = false; runBtn.disabled = false; icpdbPauseBtn.disabled = true;
+  };
+  icpdbWs.onclose = () => {
+    if (icpdbRunning) {
+      setStatus('error', 'Disconnected');
+      addIcpdbEntry('error-entry', '⚠', 'Disconnected', 'Server closed the connection.');
+      icpdbRunning = false; icpdbRunBtn.disabled = false; runBtn.disabled = false; icpdbPauseBtn.disabled = true;
+    }
+  };
+}
+
+// ── ICPDB Message handler ─────────────────────────────────────────────────────
+function handleIcpdbMessage(data) {
+  switch (data.type) {
+    case 'run_id': icpdbActiveRunId = data.run_id; break;
+    case 'started':
+      addIcpdbEntry('phase-change', '▶', 'Started', `ICPDB Maintenance — mode: ${data.run_mode}`);
+      break;
+    case 'thinking': addIcpdbThinking(); break;
+    case 'phase':
+      setIcpdbPhase(data.phase);
+      addIcpdbEntry('phase-change', '📍', `Phase ${data.phase}`, data.label);
+      setStatus('running', `ICPDB: ${data.label}`);
+      break;
+    case 'tool_call': {
+      const icon = TOOL_ICONS[data.tool] || '🔧';
+      addIcpdbEntry('tool-call', icon, data.tool, typeof data.input === 'string' ? data.input : JSON.stringify(data.input, null, 2), true);
+      break;
+    }
+    case 'tool_result':
+      addIcpdbEntry(data.ok ? 'tool-result ok' : 'tool-result err', data.ok ? '✓' : '✕', data.tool + ' → result', data.result, true);
+      break;
+    case 'phase_saved':
+      addIcpdbEntry('tool-result ok', '💾', `Phase ${data.phase} saved`, 'Output cached.');
+      break;
+    case 'update_proposals':
+      setStatus('paused', 'Awaiting review');
+      addIcpdbEntry('paused', '📝', 'Update proposals ready', `${data.proposals.length} proposed change(s) — see below.`);
+      showUpdateReviewPanel(data.proposals);
+      break;
+    case 'outreach_drafts':
+      addIcpdbEntry('phase-change', '✉️', 'Outreach drafts ready', `${data.drafts.length} draft message(s) — see below.`);
+      showOutreachPanel(data.drafts);
+      break;
+    case 'paused':
+      icpdbPaused = true;
+      setStatus('paused', 'ICPDB Paused');
+      addIcpdbEntry('paused', '⏸', 'Agent Paused', data.message);
+      icpdbInterjectHint.textContent = 'Agent paused. Type your correction and click Send to resume.';
+      icpdbInterjectHint.className = 'interject-hint paused-hint';
+      icpdbInterjectInput.className = 'interject-input paused';
+      icpdbInterjectInput.focus();
+      icpdbSendBtn.textContent = 'Resume';
+      icpdbPauseBtn.disabled = true;
+      break;
+    case 'resumed':
+      icpdbPaused = false;
+      setStatus('running', 'ICPDB resuming…');
+      addIcpdbEntry('resumed', '▶', 'Resumed', data.message ? `With note: "${data.message}"` : 'Agent resumed.');
+      icpdbInterjectHint.textContent = 'Type a correction or instruction — injected before the next tool call.';
+      icpdbInterjectHint.className = 'interject-hint';
+      icpdbInterjectInput.className = 'interject-input';
+      icpdbSendBtn.textContent = 'Send';
+      icpdbPauseBtn.disabled = false;
+      break;
+    case 'injected':
+      addIcpdbEntry('injected', '💬', 'Your note injected', data.message);
+      break;
+    case 'summary':
+      addIcpdbEntry('summary', '✅', 'Complete', data.text);
+      break;
+    case 'history_updated':
+      if (icpdbHistoryVisible) loadIcpdbHistory();
+      break;
+    case 'done':
+      icpdbRunning = false; icpdbPaused = false;
+      markIcpdbAllDone();
+      setStatus('done', 'Done');
+      icpdbRunBtn.disabled = false; icpdbPauseBtn.disabled = true; runBtn.disabled = false;
+      icpdbInterjectBar.style.display = 'none';
+      addIcpdbEntry('phase-change', '🎉', 'All done', 'ICPDB maintenance run complete.');
+      if (icpdbHistoryVisible) loadIcpdbHistory();
+      break;
+    case 'error':
+      setStatus('error', 'Error');
+      addIcpdbEntry('error-entry', '⚠', 'Error', data.message);
+      icpdbRunning = false; icpdbRunBtn.disabled = false; icpdbPauseBtn.disabled = true; runBtn.disabled = false;
+      break;
+  }
+}
+
+// ── ICPDB Update review panel ─────────────────────────────────────────────────
+function showUpdateReviewPanel(proposals) {
+  icpdbUpdateDecisions = {};
+  icpdbUpdateCards.innerHTML = '';
+  proposals.forEach((p, idx) => {
+    icpdbUpdateDecisions[idx] = { approved: false, proposal: p };
+    const card = document.createElement('div');
+    card.className = 'update-card';
+    card.id = `update-card-${idx}`;
+    const conf = p.confidence || 'medium';
+    card.innerHTML = `
+      <div class="update-card-top">
+        <div class="update-card-info">
+          <div class="update-performer">${p.url ? `<a href="${esc(p.url)}" target="_blank" style="color:var(--text);text-decoration:none">${esc(p.performer_name)}</a>` : esc(p.performer_name)}</div>
+          <div class="update-field">${esc(p.field)}</div>
+        </div>
+        <div class="update-card-btns">
+          <button class="uc-btn uc-btn-approve" data-idx="${idx}">Approve</button>
+          <button class="uc-btn uc-btn-reject" data-idx="${idx}">Reject</button>
+        </div>
+        <span class="update-confidence ${conf}">${conf}</span>
+      </div>
+      <div class="update-values">
+        ${p.current_value ? `<span class="update-current">${esc(p.current_value)}</span><span class="update-arrow">→</span>` : ''}
+        <span class="update-proposed">${esc(p.proposed_value)}</span>
+      </div>
+      <div class="update-source"><a href="${esc(p.source)}" target="_blank" style="color:var(--muted)">${esc(p.source)}</a></div>`;
+    card.querySelector('.uc-btn-approve').addEventListener('click', () => {
+      icpdbUpdateDecisions[idx].approved = true;
+      card.className = 'update-card approving';
+      card.querySelectorAll('.uc-btn').forEach(b => b.classList.remove('selected'));
+      card.querySelector('.uc-btn-approve').classList.add('selected');
+    });
+    card.querySelector('.uc-btn-reject').addEventListener('click', () => {
+      icpdbUpdateDecisions[idx].approved = false;
+      card.className = 'update-card rejecting';
+      card.querySelectorAll('.uc-btn').forEach(b => b.classList.remove('selected'));
+      card.querySelector('.uc-btn-reject').classList.add('selected');
+    });
+    icpdbUpdateCards.appendChild(card);
+  });
+  icpdbUpdateReview.style.display = 'flex';
+  icpdbUpdateReview.scrollIntoView({ behavior: 'smooth' });
+}
+
+function submitUpdateDecisions() {
+  const decisions = Object.values(icpdbUpdateDecisions).map(d => ({
+    performer_id:   d.proposal.performer_id,
+    performer_name: d.proposal.performer_name,
+    field:          d.proposal.field,
+    approved:       d.approved,
+    proposed_value: d.proposal.proposed_value,
+  }));
+  icpdbWs.send(JSON.stringify({ type: 'update_decisions', decisions }));
+  icpdbUpdateReview.style.display = 'none';
+  const approvedCount = decisions.filter(d => d.approved).length;
+  addIcpdbEntry('injected', '📝', 'Update decisions sent',
+    `${approvedCount} approved, ${decisions.length - approvedCount} rejected.`);
+  setStatus('running', 'ICPDB: Apply');
+}
+
+icpdbUpdatesSubmit.addEventListener('click', submitUpdateDecisions);
+icpdbUpdatesRejectAll.addEventListener('click', () => {
+  Object.keys(icpdbUpdateDecisions).forEach(k => { icpdbUpdateDecisions[k].approved = false; });
+  submitUpdateDecisions();
+});
+
+// ── ICPDB Outreach panel ──────────────────────────────────────────────────────
+function showOutreachPanel(drafts) {
+  icpdbOutreachCards.innerHTML = '';
+  drafts.forEach((d, idx) => {
+    const card = document.createElement('div');
+    card.className = 'outreach-card';
+    const igHandle = d.instagram ? `@${d.instagram}` : '';
+    card.innerHTML = `
+      <div>
+        <div class="outreach-performer">${esc(d.name)}</div>
+        ${igHandle ? `<div class="outreach-handle">${esc(igHandle)}</div>` : ''}
+      </div>
+      <div class="outreach-message" id="outreach-msg-${idx}" title="Click to expand">${esc(d.instagram_dm)}</div>
+      <div class="outreach-actions">
+        ${d.instagram_url ? `<button class="outreach-btn" onclick="window.open('${esc(d.instagram_url)}','_blank')">Open Instagram</button>` : ''}
+        <button class="outreach-btn" data-copy="${esc(d.instagram_dm)}" data-idx="${idx}">Copy DM</button>
+        ${d.mailto ? `<a href="${esc(d.mailto)}" class="outreach-btn" style="text-decoration:none">Email</a>` : ''}
+        <button class="outreach-btn sent-toggle" data-idx="${idx}">Mark Sent</button>
+      </div>`;
+    card.querySelector(`#outreach-msg-${idx}`).addEventListener('click', function() {
+      this.classList.toggle('expanded');
+    });
+    card.querySelector('[data-copy]').addEventListener('click', function() {
+      navigator.clipboard.writeText(d.instagram_dm).then(() => {
+        this.textContent = 'Copied!';
+        setTimeout(() => { this.textContent = 'Copy DM'; }, 2000);
+      });
+    });
+    card.querySelector('.sent-toggle').addEventListener('click', function() {
+      this.classList.toggle('sent');
+      this.textContent = this.classList.contains('sent') ? '✓ Sent' : 'Mark Sent';
+    });
+    icpdbOutreachCards.appendChild(card);
+  });
+  icpdbOutreachPanel.style.display = 'flex';
+  icpdbOutreachPanel.scrollIntoView({ behavior: 'smooth' });
+}
+
+icpdbOutreachClose.addEventListener('click', () => {
+  icpdbOutreachPanel.style.display = 'none';
+});
+
+// ── ICPDB Pause / interject ───────────────────────────────────────────────────
+icpdbPauseBtn.addEventListener('click', () => {
+  if (!icpdbWs || !icpdbRunning) return;
+  icpdbWs.send(JSON.stringify({ type: 'pause' }));
+  addIcpdbEntry('injected', '⏸', 'Pause requested', 'Agent will pause before the next tool call.');
+  icpdbPauseBtn.disabled = true;
+});
+
+function sendIcpdbInterject() {
+  const msg = icpdbInterjectInput.value.trim();
+  if (!icpdbWs) return;
+  if (icpdbPaused) {
+    icpdbWs.send(JSON.stringify({ type: 'resume', message: msg }));
+  } else {
+    if (!msg) return;
+    icpdbWs.send(JSON.stringify({ type: 'interject', message: msg }));
+    addIcpdbEntry('injected', '💬', 'Note queued', msg);
+  }
+  icpdbInterjectInput.value = '';
+}
+
+icpdbSendBtn.addEventListener('click', sendIcpdbInterject);
+icpdbInterjectInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendIcpdbInterject(); }
+});
+icpdbInterjectInput.addEventListener('input', () => {
+  icpdbInterjectInput.style.height = 'auto';
+  icpdbInterjectInput.style.height = Math.min(icpdbInterjectInput.scrollHeight, 120) + 'px';
+});
+
+// ── ICPDB History ─────────────────────────────────────────────────────────────
+icpdbHistoryToggle.addEventListener('click', () => {
+  icpdbHistoryVisible = !icpdbHistoryVisible;
+  icpdbHistoryList.style.display = icpdbHistoryVisible ? 'flex' : 'none';
+  icpdbHistoryArrow.textContent = icpdbHistoryVisible ? '▾' : '▸';
+  if (icpdbHistoryVisible) loadIcpdbHistory();
+});
+
+async function loadIcpdbHistory() {
+  try {
+    const runs = await fetch('/api/icpdb/stats').then(r => r.json()).then(s => {
+      // Re-fetch all runs via a separate call to /api/icpdb/stats (only has last_run)
+      // We'll use a simple display of the last_run for now
+      return s.last_run ? [s.last_run] : [];
+    });
+    renderIcpdbHistory(runs);
+  } catch {}
+}
+
+function renderIcpdbHistory(runs) {
+  icpdbHistoryList.innerHTML = '';
+  if (!runs.length) {
+    icpdbHistoryList.innerHTML = '<div style="font-size:11px;color:var(--muted)">No ICPDB runs yet.</div>';
+    return;
+  }
+  runs.forEach(run => {
+    const card = document.createElement('div');
+    card.className = 'run-card';
+    const date = run.created_at ? run.created_at.replace('T',' ').slice(0,16) : '';
+    const phases = run.phases_completed || [];
+    card.innerHTML = `
+      <div class="run-header">
+        <div class="run-month">${esc(run.run_mode || 'ICPDB Run')}</div>
+        <div class="run-meta">
+          <span class="run-status ${run.status}">${run.status}</span>
+          <span>${date}</span>
+          <span>${phases.length} phases</span>
+        </div>
+      </div>`;
+    icpdbHistoryList.appendChild(card);
+  });
+}
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 function loadAdminFields() {
@@ -866,7 +1485,6 @@ document.getElementById('admin-save-btn').addEventListener('click', () => {
   });
   localStorage.setItem('csAgentConfig', JSON.stringify(cfg));
   adminOverlay.style.display = 'none'; adminBtn.classList.remove('active');
-  addEntry('injected', '⚙️', 'Admin', 'Database config saved — applies on next run.');
 });
 document.getElementById('admin-reset-btn').addEventListener('click', () => {
   localStorage.removeItem('csAgentConfig');
@@ -877,17 +1495,19 @@ document.getElementById('admin-reset-btn').addEventListener('click', () => {
 let galleryOpen = false;
 
 galleryBtn.addEventListener('click', async () => {
+  // Gallery only works on review screen
+  if (appEl.dataset.screen !== 'review') { switchScreen('review'); return; }
   galleryOpen = !galleryOpen;
   galleryBtn.classList.toggle('active', galleryOpen);
   if (galleryOpen) {
-    feedEl.style.display = 'none';
+    feed.style.display = 'none';
     galleryPanel.style.display = 'flex';
     galleryPanel.style.flexDirection = 'column';
     await loadGallery();
   } else {
     galleryPanel.style.display = 'none';
-    feedEl.style.display = 'flex';
-    feedEl.style.flexDirection = 'column';
+    feed.style.display = 'flex';
+    feed.style.flexDirection = 'column';
   }
 });
 
@@ -934,6 +1554,14 @@ async function loadGallery() {
     galleryContent.innerHTML = `<div style="color:var(--red);font-size:12px">Failed to load gallery: ${e.message}</div>`;
   }
 }
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+buildPhaseList();
+buildIcpdbPhaseList();
+const now = new Date();
+monthInput.value = now.toLocaleString('default', { month: 'long' }) + ' ' + now.getFullYear();
+loadAdminFields();
+loadOverview();
 </script>
 </body>
 </html>

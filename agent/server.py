@@ -35,6 +35,7 @@ from fastapi.staticfiles import StaticFiles
 from . import config as cfg
 from . import memory as mem
 from .agent import run_with_callbacks
+from . import icpdb_agent
 
 app = FastAPI(title="Contortion Space Agent Dashboard")
 
@@ -204,6 +205,129 @@ async def save_feedback(request: Request):
 
 
 # ── Serve dashboard HTML ──────────────────────────────────────────────────────
+
+# ── ICPDBSession ──────────────────────────────────────────────────────────────
+
+class ICPDBSession:
+    def __init__(self, ws: WebSocket):
+        self.ws = ws
+        self.outbox:                 queue.Queue[dict | None] = queue.Queue()
+        self.inbox:                  queue.Queue[str]         = queue.Queue()
+        self.update_decisions_inbox: queue.Queue[dict]        = queue.Queue()
+        self.pause_requested = threading.Event()
+        self.thread: threading.Thread | None = None
+
+    def on_event(self, event: dict) -> None:
+        self.outbox.put(event)
+
+    def check_pause(self) -> str | None:
+        if not self.pause_requested.is_set():
+            try:
+                msg = self.inbox.get_nowait()
+                self.outbox.put({"type": "injected", "message": msg})
+                return msg
+            except queue.Empty:
+                return None
+        self.outbox.put({"type": "paused", "message": "Agent paused — waiting for your input."})
+        self.pause_requested.clear()
+        msg = self.inbox.get()
+        self.outbox.put({"type": "resumed", "message": msg})
+        return msg
+
+    def get_update_decisions(self, proposals: list[dict]) -> dict:
+        return self.update_decisions_inbox.get()
+
+    def start(self, run_mode: str) -> None:
+        def _run():
+            try:
+                icpdb_agent.run_with_callbacks(
+                    on_event=self.on_event,
+                    check_pause=self.check_pause,
+                    get_update_decisions=self.get_update_decisions,
+                    run_mode=run_mode,
+                )
+            except Exception as exc:
+                self.outbox.put({"type": "error", "message": str(exc)})
+            finally:
+                self.outbox.put(None)
+
+        self.thread = threading.Thread(target=_run, daemon=True)
+        self.thread.start()
+
+
+# ── ICPDB WebSocket endpoint ──────────────────────────────────────────────────
+
+@app.websocket("/ws/icpdb")
+async def icpdb_websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    session: ICPDBSession | None = None
+    loop = asyncio.get_event_loop()
+
+    try:
+        raw = await ws.receive_text()
+        msg = json.loads(raw)
+
+        if msg.get("type") != "start":
+            await ws.send_text(json.dumps({"type": "error", "message": "First message must be {type:'start', run_mode:'...'}"}))
+            return
+
+        run_mode = msg.get("run_mode", "full")
+        session = ICPDBSession(ws)
+        session.start(run_mode)
+
+        await ws.send_text(json.dumps({"type": "started", "run_mode": run_mode}))
+
+        async def _pump_outbox():
+            while True:
+                event = await loop.run_in_executor(None, session.outbox.get)
+                if event is None:
+                    await ws.send_text(json.dumps({"type": "done"}))
+                    break
+                await ws.send_text(json.dumps(event))
+
+        async def _receive_controls():
+            while True:
+                try:
+                    raw = await ws.receive_text()
+                    ctrl = json.loads(raw)
+                    t = ctrl.get("type")
+                    if t == "interject":
+                        session.inbox.put(ctrl.get("message", ""))
+                    elif t == "pause":
+                        session.pause_requested.set()
+                    elif t == "resume":
+                        try:
+                            session.inbox.put_nowait(ctrl.get("message", ""))
+                        except queue.Full:
+                            pass
+                    elif t == "update_decisions":
+                        session.update_decisions_inbox.put({"decisions": ctrl.get("decisions", [])})
+                except WebSocketDisconnect:
+                    break
+
+        await asyncio.gather(_pump_outbox(), _receive_controls())
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        try:
+            await ws.send_text(json.dumps({"type": "error", "message": str(exc)}))
+        except Exception:
+            pass
+
+
+# ── ICPDB stats endpoint ──────────────────────────────────────────────────────
+
+@app.get("/api/icpdb/stats")
+async def get_icpdb_stats():
+    audit = mem.get_last_icpdb_audit()
+    runs = mem.load_icpdb_runs()
+    last_run = runs[0] if runs else None
+    return JSONResponse({
+        "last_audit": audit,
+        "last_run": {k: v for k, v in last_run.items() if k not in ("audit",)} if last_run else None,
+    })
+
 
 @app.get("/")
 async def get_dashboard():
