@@ -12,21 +12,14 @@ import unicodedata
 import requests
 from typing import Any
 
-from .config import (
-    NOTION_VERSION, NOTION_BASE,
-    NOTION_MONTHLY_POSTS_DS, NOTION_MONTHLY_RESEARCH_DS, NOTION_ICPDB_DS,
-    WEBFLOW_BASE, WEBFLOW_SITE_ID, WEBFLOW_BLOG_COL_ID, WEBFLOW_PERF_COL_ID,
-    WF_FIELD_NAME, WF_FIELD_SLUG, WF_FIELD_POST_BODY, WF_FIELD_POST_DESC,
-    WF_FIELD_POST_TYPE2, WF_FIELD_MONTHLY_ROUNDUP, WF_FIELD_FEAT_PERFORMERS,
-    WF_POST_TYPE_ARTICLE,
-)
+from . import config as cfg
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _notion_headers() -> dict:
     key = os.environ["NOTION_API_KEY"]
-    return {"Authorization": f"Bearer {key}", "Notion-Version": NOTION_VERSION,
+    return {"Authorization": f"Bearer {key}", "Notion-Version": cfg.NOTION_VERSION,
             "Content-Type": "application/json"}
 
 
@@ -45,7 +38,26 @@ def _slugify(text: str) -> str:
 
 def _raise_for(resp: requests.Response) -> None:
     if not resp.ok:
-        raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:400]}")
+        msg = resp.text[:400]
+        if resp.status_code == 404 and "object_not_found" in msg:
+            raise RuntimeError(
+                f"HTTP 404 – database not found. Make sure you have shared this database "
+                f"with your Notion integration ('Contortion Space Agent'). Full error: {msg}"
+            )
+        raise RuntimeError(f"HTTP {resp.status_code}: {msg}")
+
+
+def _notion_append_blocks(page_id: str, blocks: list[dict]) -> None:
+    """Append blocks to an existing Notion page, chunking to respect the 100-block limit."""
+    for i in range(0, len(blocks), 100):
+        chunk = blocks[i:i + 100]
+        resp = requests.patch(
+            f"{cfg.NOTION_BASE}/blocks/{page_id}/children",
+            headers=_notion_headers(),
+            json={"children": chunk},
+            timeout=30,
+        )
+        _raise_for(resp)
 
 
 # ── web search ───────────────────────────────────────────────────────────────
@@ -96,20 +108,21 @@ def web_search(query: str, max_results: int = 8) -> dict:
 # ── Notion ───────────────────────────────────────────────────────────────────
 
 def notion_create_research_page(month_label: str, content_markdown: str) -> dict:
-    """
-    Create a research-notes page in the Monthly research Notion database.
-    Returns the new page URL.
-    """
+    """Create a research-notes page in the Monthly research Notion database."""
+    blocks = _markdown_to_notion_blocks(content_markdown)
+    # Notion allows at most 100 blocks on page creation; append the rest after
     payload = {
-        "parent": {"database_id": NOTION_MONTHLY_RESEARCH_DS},
+        "parent": {"database_id": cfg.get("NOTION_MONTHLY_RESEARCH_DS")},
         "properties": {
             "Research month": {"title": [{"text": {"content": month_label}}]},
         },
-        "children": _markdown_to_notion_blocks(content_markdown),
+        "children": blocks[:100],
     }
-    resp = requests.post(f"{NOTION_BASE}/pages", headers=_notion_headers(), json=payload, timeout=30)
+    resp = requests.post(f"{cfg.NOTION_BASE}/pages", headers=_notion_headers(), json=payload, timeout=30)
     _raise_for(resp)
     page = resp.json()
+    if len(blocks) > 100:
+        _notion_append_blocks(page["id"], blocks[100:])
     return {"page_id": page["id"], "url": page["url"]}
 
 
@@ -117,38 +130,39 @@ def notion_create_article_page(
     month_label: str,
     article_body: str,
     performer_page_ids: list[str],
+    show_page_ids: list[str] | None = None,
 ) -> dict:
     """
     Create the monthly article in the Monthly performance posts Notion database,
-    linking the relevant performer pages.
+    linking the relevant performer and show pages.
     """
-    payload = {
-        "parent": {"database_id": NOTION_MONTHLY_POSTS_DS},
-        "properties": {
-            "Name": {"title": [{"text": {"content": month_label}}]},
-            "Performers mentioned": {
-                "relation": [{"id": pid} for pid in performer_page_ids]
-            },
+    properties: dict = {
+        "Name": {"title": [{"text": {"content": month_label}}]},
+        "Performers mentioned": {
+            "relation": [{"id": pid} for pid in performer_page_ids]
         },
-        "children": _markdown_to_notion_blocks(article_body),
     }
-    resp = requests.post(f"{NOTION_BASE}/pages", headers=_notion_headers(), json=payload, timeout=30)
+    if show_page_ids:
+        properties["Shows"] = {"relation": [{"id": sid} for sid in show_page_ids]}
+
+    blocks = _markdown_to_notion_blocks(article_body)
+    payload = {
+        "parent": {"database_id": cfg.get("NOTION_MONTHLY_POSTS_DS")},
+        "properties": properties,
+        "children": blocks[:100],
+    }
+    resp = requests.post(f"{cfg.NOTION_BASE}/pages", headers=_notion_headers(), json=payload, timeout=30)
     _raise_for(resp)
     page = resp.json()
+    if len(blocks) > 100:
+        _notion_append_blocks(page["id"], blocks[100:])
     return {"page_id": page["id"], "url": page["url"]}
 
 
 def notion_search_performer(name: str) -> dict:
-    """
-    Search the ICPDB for a performer by name.
-    Returns a list of matches with id, name, instagram, notion_url.
-    """
-    payload = {
-        "filter": {"property": "database_id", "value": NOTION_ICPDB_DS},
-        "query": name,
-    }
+    """Search the ICPDB for a performer by name."""
     resp = requests.post(
-        f"{NOTION_BASE}/search",
+        f"{cfg.NOTION_BASE}/search",
         headers=_notion_headers(),
         json={"query": name, "filter": {"value": "page", "property": "object"}},
         timeout=30,
@@ -178,10 +192,7 @@ def notion_search_performer(name: str) -> dict:
 
 
 def notion_list_performers_in_icpdb(limit: int = 200) -> dict:
-    """
-    Returns all performers in the ICPDB (up to `limit`) with id, name, instagram.
-    Used to bulk-match performers mentioned in the article.
-    """
+    """Returns all performers in the ICPDB (up to `limit`) with id, name, instagram."""
     all_results = []
     has_more = True
     cursor = None
@@ -193,7 +204,7 @@ def notion_list_performers_in_icpdb(limit: int = 200) -> dict:
         if cursor:
             payload["start_cursor"] = cursor
         resp = requests.post(
-            f"{NOTION_BASE}/databases/{NOTION_ICPDB_DS}/query",
+            f"{cfg.NOTION_BASE}/databases/{cfg.get('NOTION_ICPDB_DS')}/query",
             headers=_notion_headers(),
             json=payload,
             timeout=30,
@@ -212,15 +223,93 @@ def notion_list_performers_in_icpdb(limit: int = 200) -> dict:
     return {"performers": all_results}
 
 
+def notion_create_performer(name: str, instagram: str = "") -> dict:
+    """Create a new performer page in the ICPDB."""
+    properties: dict = {
+        "Contortionist name": {"title": [{"text": {"content": name}}]},
+        "Performer status": {"select": {"name": "Performing"}},
+    }
+    if instagram:
+        properties["Instagram"] = {"rich_text": [{"text": {"content": instagram}}]}
+
+    payload = {
+        "parent": {"database_id": cfg.get("NOTION_ICPDB_DS")},
+        "properties": properties,
+    }
+    resp = requests.post(f"{cfg.NOTION_BASE}/pages", headers=_notion_headers(), json=payload, timeout=30)
+    _raise_for(resp)
+    page = resp.json()
+    return {"page_id": page["id"], "url": page["url"], "name": name}
+
+
+def notion_list_shows(limit: int = 200) -> dict:
+    """Returns shows from the Shows database for linking to the article."""
+    all_results: list[dict] = []
+    has_more = True
+    cursor = None
+    while has_more and len(all_results) < limit:
+        payload: dict[str, Any] = {
+            "page_size": min(100, limit - len(all_results)),
+        }
+        if cursor:
+            payload["start_cursor"] = cursor
+        resp = requests.post(
+            f"{cfg.NOTION_BASE}/databases/{cfg.get('NOTION_SHOWS_DS')}/query",
+            headers=_notion_headers(),
+            json=payload,
+            timeout=30,
+        )
+        _raise_for(resp)
+        data = resp.json()
+        for page in data.get("results", []):
+            props = page.get("properties", {})
+            name = ""
+            for key in ("Name", "Show name", "Title"):
+                name_texts = props.get(key, {}).get("title", [])
+                if name_texts:
+                    name = name_texts[0].get("plain_text", "")
+                    break
+            all_results.append({"id": page["id"], "name": name, "url": page.get("url", "")})
+        has_more = data.get("has_more", False)
+        cursor = data.get("next_cursor")
+    return {"shows": all_results}
+
+
+def notion_search_show(name: str) -> dict:
+    """Search the Shows database for a specific show by name."""
+    resp = requests.post(
+        f"{cfg.NOTION_BASE}/search",
+        headers=_notion_headers(),
+        json={"query": name, "filter": {"value": "page", "property": "object"}},
+        timeout=30,
+    )
+    _raise_for(resp)
+    results = resp.json().get("results", [])
+    matches = []
+    shows_id = cfg.get("NOTION_SHOWS_DS").replace("-", "")
+    for page in results:
+        parent = page.get("parent", {})
+        db_id = parent.get("database_id", "").replace("-", "")
+        if db_id != shows_id:
+            continue
+        props = page.get("properties", {})
+        page_name = ""
+        for key in ("Name", "Show name", "Title"):
+            name_texts = props.get(key, {}).get("title", [])
+            if name_texts:
+                page_name = name_texts[0].get("plain_text", "")
+                break
+        if name.lower() in page_name.lower():
+            matches.append({"id": page["id"], "name": page_name, "url": page.get("url", "")})
+    return {"matches": matches}
+
+
 # ── Webflow ───────────────────────────────────────────────────────────────────
 
 def webflow_find_performers(names: list[str]) -> dict:
-    """
-    Look up Webflow Contortion Performers by name and return their item IDs.
-    Used to populate the featured-performers multi-reference field.
-    """
+    """Look up Webflow Contortion Performers by name and return their item IDs."""
     resp = requests.get(
-        f"{WEBFLOW_BASE}/collections/{WEBFLOW_PERF_COL_ID}/items",
+        f"{cfg.WEBFLOW_BASE}/collections/{cfg.WEBFLOW_PERF_COL_ID}/items",
         headers=_webflow_headers(),
         params={"limit": 100},
         timeout=30,
@@ -241,29 +330,26 @@ def webflow_create_blog_draft(
     slug: str,
     description: str,
     body_html: str,
-    featured_performer_ids: list[str],
+    featured_performer_ids: list[str] | None = None,
     hero_image_asset_id: str | None = None,
 ) -> dict:
-    """
-    Create a draft Blog Post item in Webflow CMS.
-    Returns the item ID and a preview URL.
-    """
+    """Create a draft Blog Post item in Webflow CMS."""
     field_data: dict[str, Any] = {
-        WF_FIELD_NAME: title,
-        WF_FIELD_SLUG: slug,
-        WF_FIELD_POST_BODY: body_html,
-        WF_FIELD_POST_DESC: description,
-        WF_FIELD_POST_TYPE2: WF_POST_TYPE_ARTICLE,
-        WF_FIELD_MONTHLY_ROUNDUP: True,
+        cfg.WF_FIELD_NAME: title,
+        cfg.WF_FIELD_SLUG: slug,
+        cfg.WF_FIELD_POST_BODY: body_html,
+        cfg.WF_FIELD_POST_DESC: description,
+        cfg.WF_FIELD_POST_TYPE2: cfg.WF_POST_TYPE_ARTICLE,
+        cfg.WF_FIELD_MONTHLY_ROUNDUP: True,
     }
     if featured_performer_ids:
-        field_data[WF_FIELD_FEAT_PERFORMERS] = featured_performer_ids
+        field_data[cfg.WF_FIELD_FEAT_PERFORMERS] = featured_performer_ids
     if hero_image_asset_id:
         field_data["hero-image"] = {"assetId": hero_image_asset_id}
 
     payload = {"fieldData": field_data, "isDraft": True}
     resp = requests.post(
-        f"{WEBFLOW_BASE}/collections/{WEBFLOW_BLOG_COL_ID}/items",
+        f"{cfg.WEBFLOW_BASE}/collections/{cfg.WEBFLOW_BLOG_COL_ID}/items",
         headers=_webflow_headers(),
         json=payload,
         timeout=30,
@@ -272,18 +358,13 @@ def webflow_create_blog_draft(
     item = resp.json()
     item_id = item.get("id", "")
     preview_url = f"https://contortion.space/blog/{slug}"
-    return {"item_id": item_id, "draft_url": preview_url, "webflow_editor_url": f"https://webflow.com/design/{WEBFLOW_SITE_ID}"}
+    return {"item_id": item_id, "draft_url": preview_url,
+            "webflow_editor_url": f"https://webflow.com/design/{cfg.WEBFLOW_SITE_ID}"}
 
 
 # ── Notion markdown → blocks (lightweight) ───────────────────────────────────
 
 def _markdown_to_notion_blocks(md: str) -> list[dict]:
-    """
-    Very lightweight Markdown → Notion block converter.
-    Handles: headings (# ## ###), bold (**text**), italic (*text*),
-    links ([text](url)), bullet lists (- item), horizontal rules (---),
-    and plain paragraphs.
-    """
     blocks = []
     for line in md.split("\n"):
         stripped = line.rstrip()
@@ -298,7 +379,7 @@ def _markdown_to_notion_blocks(md: str) -> list[dict]:
         elif stripped == "---":
             blocks.append({"object": "block", "type": "divider", "divider": {}})
         elif stripped == "":
-            pass  # skip blank lines
+            pass
         else:
             blocks.append(_paragraph(stripped))
     return blocks
@@ -307,7 +388,6 @@ def _markdown_to_notion_blocks(md: str) -> list[dict]:
 def _rich_text(text: str) -> list[dict]:
     """Parse inline markdown (bold, italic, links) into Notion rich_text objects."""
     parts = []
-    # Simple tokeniser: split on **bold**, *italic*, [text](url)
     pattern = re.compile(r"\*\*(.+?)\*\*|\*(.+?)\*|\[(.+?)\]\((.+?)\)|(.+?)(?=\*\*|\*|\[|$)", re.DOTALL)
     for m in pattern.finditer(text):
         if not any(m.groups()):
@@ -327,11 +407,6 @@ def _rich_text(text: str) -> list[dict]:
 # ── Image generation ──────────────────────────────────────────────────────────
 
 def generate_images(month_label: str, performer_page_ids: list[str]) -> dict:
-    """
-    Generate the Story (1080×1920) and Header (1500×844) images for the
-    monthly roundup, upload the header to Webflow, and return local paths
-    plus the Webflow asset ID/URL.
-    """
     from .compositor import generate_and_upload_images
     return generate_and_upload_images(month_label, performer_page_ids)
 
