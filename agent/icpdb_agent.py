@@ -317,6 +317,7 @@ def _loop(
                     "health_score":                    result.get("health_score", 0),
                     "completeness":                    result.get("completeness", {}),
                     "performers_needing_update_count": len(result.get("performers_needing_update", [])),
+                    "duplicates":                      result.get("duplicates", {}),
                 }
                 if run_id:
                     mem.save_icpdb_phase(run_id, 1, audit_data)

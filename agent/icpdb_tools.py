@@ -194,11 +194,109 @@ def icpdb_audit() -> dict:
     else:
         health_score = 0
 
+    # ── Duplicate detection ───────────────────────────────────────────────────
+    import re as _re
+
+    def _norm(s: str) -> str:
+        return _re.sub(r"\s+", " ", s.lower().strip())
+
+    def _tokens(s: str) -> set[str]:
+        return set(_re.sub(r"[^a-z0-9 ]", "", _norm(s)).split())
+
+    # Build a flat list of (id, name, instagram) for comparison
+    all_performers_flat = []
+    for page in all_pages:
+        props = page.get("properties", {})
+        name = ""
+        if title_field and title_field in props:
+            name = _prop_value(props[title_field])
+        if not name:
+            for prop in props.values():
+                if prop.get("type") == "title":
+                    name = _prop_value(prop)
+                    break
+        ig = _prop_value(props.get("Instagram", {})) if "Instagram" in props else ""
+        all_performers_flat.append({
+            "id": page["id"], "name": name, "url": page.get("url", ""), "instagram": ig,
+        })
+
+    exact_dupes: list[dict] = []
+    suspected_dupes: list[dict] = []
+    seen_pairs: set[frozenset] = set()
+
+    # Index by normalised name and instagram handle
+    by_norm_name: dict[str, list[dict]] = {}
+    by_instagram: dict[str, list[dict]] = {}
+    for p in all_performers_flat:
+        if not p["name"]:
+            continue
+        key = _norm(p["name"])
+        by_norm_name.setdefault(key, []).append(p)
+        if p["instagram"]:
+            ig_key = p["instagram"].lower().lstrip("@")
+            by_instagram.setdefault(ig_key, []).append(p)
+
+    # Exact name duplicates
+    for key, group in by_norm_name.items():
+        if len(group) > 1:
+            pair_key = frozenset(p["id"] for p in group)
+            if pair_key not in seen_pairs:
+                seen_pairs.add(pair_key)
+                exact_dupes.append({
+                    "reason": "identical name",
+                    "performers": [{"id": p["id"], "name": p["name"], "url": p["url"]} for p in group],
+                })
+
+    # Shared Instagram handle (different names — probable same person)
+    for ig_key, group in by_instagram.items():
+        if len(group) > 1:
+            pair_key = frozenset(p["id"] for p in group)
+            if pair_key not in seen_pairs:
+                seen_pairs.add(pair_key)
+                exact_dupes.append({
+                    "reason": f"shared Instagram @{ig_key}",
+                    "performers": [{"id": p["id"], "name": p["name"], "url": p["url"]} for p in group],
+                })
+
+    # Suspected: high token overlap (≥2 shared tokens, neither name is a subset of common words)
+    _STOPWORDS = {"the", "a", "an", "of", "and", "or", "de", "la", "le", "van", "von", "el"}
+    performers_with_names = [p for p in all_performers_flat if p["name"]]
+    for i in range(len(performers_with_names)):
+        for j in range(i + 1, len(performers_with_names)):
+            a, b = performers_with_names[i], performers_with_names[j]
+            pair_key = frozenset([a["id"], b["id"]])
+            if pair_key in seen_pairs:
+                continue
+            toks_a = _tokens(a["name"]) - _STOPWORDS
+            toks_b = _tokens(b["name"]) - _STOPWORDS
+            if not toks_a or not toks_b:
+                continue
+            shared = toks_a & toks_b
+            # Suspect if 2+ tokens shared AND shared covers most of the shorter name
+            shorter_len = min(len(toks_a), len(toks_b))
+            if len(shared) >= 2 and len(shared) >= shorter_len * 0.7:
+                seen_pairs.add(pair_key)
+                suspected_dupes.append({
+                    "reason": f"similar name (shared: {', '.join(sorted(shared))})",
+                    "performers": [
+                        {"id": a["id"], "name": a["name"], "url": a["url"]},
+                        {"id": b["id"], "name": b["name"], "url": b["url"]},
+                    ],
+                })
+
+    duplicates = {
+        "exact_count":    len(exact_dupes),
+        "suspected_count": len(suspected_dupes),
+        "exact":     exact_dupes[:20],    # cap to avoid huge payloads
+        "suspected": suspected_dupes[:20],
+    }
+
     return {
         "total": total,
         "health_score": health_score,
         "completeness": completeness,
         "performers_needing_update": performers_needing_update,
+        "duplicates": duplicates,
         "title_field": title_field,
         "trackable_fields": trackable_fields,
     }

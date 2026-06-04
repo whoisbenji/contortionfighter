@@ -322,6 +322,18 @@
   .audit-field-pct.mid  { color: var(--yellow); }
   .audit-field-pct.low  { color: var(--red); }
 
+  /* ── Duplicate detection section ── */
+  .audit-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); padding: 10px 18px 6px; }
+  .audit-dupes-list { padding: 0 18px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .audit-dupe-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; }
+  .audit-dupe-badge { padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+  .audit-dupe-badge.exact     { background: rgba(255,80,80,.18); color: var(--red); }
+  .audit-dupe-badge.suspected { background: rgba(255,180,0,.15); color: var(--yellow); }
+  .audit-dupe-reason { color: var(--text-dim); flex-shrink: 0; }
+  .audit-dupe-names { color: var(--text); display: flex; flex-wrap: wrap; gap: 4px; }
+  .audit-dupe-names a { color: var(--purple); text-decoration: none; }
+  .audit-dupe-names a:hover { text-decoration: underline; }
+
   /* ── Update review cards (grouped by performer) ── */
   .update-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 10px; }
   .update-performer-header { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; background: rgba(155,77,255,.07); border-bottom: 1px solid var(--border); gap: 10px; }
@@ -1318,6 +1330,10 @@ function renderAuditMetrics(data) {
   const completeness = data.completeness || {};
   const needsUpdate = data.performers_needing_update_count || 0;
   const total = data.total || 0;
+  const dupes = data.duplicates || {};
+  const exactCount = dupes.exact_count || 0;
+  const suspectedCount = dupes.suspected_count || 0;
+  const totalDupes = exactCount + suspectedCount;
 
   // Sort fields: lowest % first so problem areas are visible
   const fields = Object.entries(completeness).sort((a, b) => a[1].pct - b[1].pct);
@@ -1334,6 +1350,24 @@ function renderAuditMetrics(data) {
         <div class="audit-field-pct ${cls}">${pct}%</div>
       </div>`;
   }).join('');
+
+  // Duplicate groups list
+  const allDupeGroups = [
+    ...(dupes.exact || []).map(g => ({...g, type: 'exact'})),
+    ...(dupes.suspected || []).map(g => ({...g, type: 'suspected'})),
+  ];
+  const dupesHtml = allDupeGroups.length ? `
+    <div class="audit-dupes-list">
+      ${allDupeGroups.map(g => `
+        <div class="audit-dupe-row">
+          <span class="audit-dupe-badge ${g.type}">${g.type === 'exact' ? 'Exact' : 'Suspected'}</span>
+          <span class="audit-dupe-reason">${esc(g.reason)}</span>
+          <span class="audit-dupe-names">${g.performers.map(p =>
+            p.url ? `<a href="${esc(p.url)}" target="_blank" style="color:var(--cyan)">${esc(p.name)}</a>`
+                  : esc(p.name)
+          ).join(' · ')}</span>
+        </div>`).join('')}
+    </div>` : `<div style="padding:12px 18px;font-size:12px;color:var(--green)">✓ No duplicates detected</div>`;
 
   const card = document.createElement('div');
   card.className = 'audit-metrics-card';
@@ -1353,15 +1387,20 @@ function renderAuditMetrics(data) {
           <div class="audit-stat-lbl">need updates</div>
         </div>
         <div class="audit-stat">
+          <div class="audit-stat-val" style="color:${totalDupes > 0 ? 'var(--red)' : 'var(--green)'}">${totalDupes}</div>
+          <div class="audit-stat-lbl">duplicates</div>
+        </div>
+        <div class="audit-stat">
           <div class="audit-stat-val">${fields.length}</div>
           <div class="audit-stat-lbl">fields tracked</div>
         </div>
       </div>
     </div>
-    <div class="audit-fields-grid">${fieldRowsHtml}</div>`;
+    <div class="audit-fields-grid">${fieldRowsHtml}</div>
+    <div class="audit-section-label">Duplicates &amp; Suspected Duplicates</div>
+    ${dupesHtml}`;
 
   const feed = document.getElementById('icpdb-feed');
-  // Remove empty state if present
   const empty = feed.querySelector('.empty-state');
   if (empty) empty.remove();
   feed.appendChild(card);
