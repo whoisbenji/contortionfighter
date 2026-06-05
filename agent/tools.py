@@ -359,6 +359,7 @@ def notion_fetch_page(page_id_or_url: str, max_blocks: int = 200) -> dict:
 
 
 
+def notion_list_performers_in_icpdb(limit: int = 200) -> dict:
     """Returns all performers in the ICPDB (up to `limit`) with id, name, instagram."""
     all_results = []
     has_more = True
