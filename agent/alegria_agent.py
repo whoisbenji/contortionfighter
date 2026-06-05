@@ -46,19 +46,22 @@ professionals worldwide. Core outputs:
 ════════════════════════════════════════
 YOUR SPECIALIST AGENTS
 ════════════════════════════════════════
-You coordinate two specialist AI agents. When a task calls for one, call suggest_agent \
-and a launch card will appear in the dashboard.
+You coordinate two specialist AI agents. You can run them directly using run_luzia and \
+run_kooza — you do not need to ask the user to go to another panel. Only use suggest_agent \
+if the user explicitly asks to open the agent panel themselves.
 
 • **Luzia** (Performance Review Agent) — named after CdS's 2016 Mexico show. \
   Researches global contortion performances for a given month via web search, \
   writes the roundup article, matches performers to the ICPDB, generates imagery, \
-  and publishes to Notion and Webflow. Run once per month.
-  Run modes: fresh run or replay from any phase.
+  and publishes to Notion and Webflow. Run once per month. \
+  Use run_luzia with a month_label. You will be asked to relay performer matching \
+  decisions to the user during the run.
 
 • **Kooza** (ICPDB Maintenance Agent) — named after CdS's 2007 show ("treasure" in Sanskrit). \
   Audits performer completeness, fills gaps via web research, detects and resolves \
-  duplicate entries, drafts Instagram/email outreach. Run modes: full, update_only, \
-  deduplicate, outreach.
+  duplicate entries, drafts Instagram/email outreach. \
+  Use run_kooza with a run_mode: full, update_only, deduplicate, or outreach. \
+  You will be asked to relay update/dedup decisions to the user during the run.
 
 ════════════════════════════════════════
 YOUR ROLE
@@ -71,8 +74,9 @@ You are the editor-in-chief's right hand. Help with:
    about shows, performers, competitions, and circus news
 3. **Drafting** — social media captions, outreach emails, pitch ideas, interview questions, \
    Instagram Story copy, newsletter blurbs
-4. **Run coordination** — advising when to run Luzia or Kooza, reviewing their outputs, \
-   suggesting replay from a specific phase if needed
+4. **Run coordination** — running Luzia or Kooza directly when asked, reviewing their \
+   outputs, replaying from a specific phase if needed. When the user asks to run an agent, \
+   do it — don't ask for confirmation unless something is genuinely ambiguous
 5. **Memory** — when the user shares important context (a focus area, a planned feature, \
    a preference, a decision made), use save_memory to retain it for future conversations
 6. **Platform knowledge** — answer questions about how the platform works, what's been done, \
@@ -165,11 +169,64 @@ TOOLS: list[dict] = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "run_luzia",
+        "description": (
+            "Run the Luzia Performance Review Agent directly. Use this when the user asks you "
+            "to run a performance review, write the monthly roundup, or publish an article for "
+            "a specific month. Luzia will research performances, match performers to the ICPDB, "
+            "generate images, write the article, and publish to Notion and Webflow. "
+            "You will be asked to relay any decisions needed (e.g. performer matching) to the user."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "month_label": {
+                    "type": "string",
+                    "description": "Month to run for, e.g. 'May 2025'.",
+                },
+                "replay_from": {
+                    "type": "integer",
+                    "description": "Phase to start from (1=Research, 2=Matching, 3=Images, 4=Article, 5=Webflow). Defaults to 1.",
+                },
+                "replay_run_id": {
+                    "type": "string",
+                    "description": "Run ID to resume/replay from (optional).",
+                },
+            },
+            "required": ["month_label"],
+        },
+    },
+    {
+        "name": "run_kooza",
+        "description": (
+            "Run the Kooza ICPDB Maintenance Agent directly. Use this when the user asks you "
+            "to update the performer database, find duplicates, fill in missing fields, or send "
+            "outreach. You will be asked to relay any decisions needed (e.g. approving updates "
+            "or resolving duplicates) to the user."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "run_mode": {
+                    "type": "string",
+                    "enum": ["full", "update_only", "deduplicate", "outreach"],
+                    "description": (
+                        "full = audit + research + review + apply + outreach; "
+                        "update_only = research + review + apply; "
+                        "deduplicate = audit duplicates + resolve; "
+                        "outreach = draft outreach messages only."
+                    ),
+                },
+            },
+            "required": ["run_mode"],
+        },
+    },
+    {
         "name": "suggest_agent",
         "description": (
-            "Recommend launching a specialist agent. Sends a launch card to the dashboard "
-            "so the user can start it with one click. Call when the user's request clearly "
-            "calls for Luzia (performance review) or Kooza (ICPDB maintenance)."
+            "Show a launch card for a specialist agent WITHOUT running it. Only use this if "
+            "the user explicitly wants to go to that agent's panel themselves. "
+            "Prefer run_luzia or run_kooza to actually execute the agent directly."
         ),
         "input_schema": {
             "type": "object",
@@ -288,6 +345,213 @@ def _build_system_prompt() -> str:
     )
 
     return "\n\n".join(sections)
+
+
+def _run_luzia_inline(inp: dict, on_event, get_user_message) -> dict:
+    """Run Luzia inline, proxying its events and decisions through Alegría's chat."""
+    import re as _re
+    from . import luzia_agent
+
+    month_label   = inp.get("month_label", "")
+    replay_from   = int(inp.get("replay_from", 1))
+    replay_run_id = inp.get("replay_run_id")
+    cached_run    = mem.get_run(replay_run_id) if replay_run_id else None
+
+    def sub_on_event(event):
+        t = event.get("type", "")
+        # Forward phase changes and summaries as chat messages
+        if t == "phase":
+            on_event({"type": "alegria_message",
+                      "text": f"**Luzia — Phase {event.get('phase')}: {event.get('label', '')}**"})
+        elif t == "summary":
+            on_event({"type": "alegria_message", "text": event.get("text", "")})
+        elif t == "error":
+            on_event({"type": "alegria_message",
+                      "text": f"⚠ Luzia error: {event.get('message', '')}"})
+        # Forward tool_call / tool_result for live progress (no bubble spam — just the agent event)
+        elif t == "research_question":
+            past_runs = event.get("past_runs", [])
+            if past_runs:
+                options = "\n".join(
+                    f"- **{r['month_label']}** ({r['created_at'][:10]})"
+                    for r in past_runs[:5]
+                )
+                on_event({"type": "alegria_message",
+                          "text": (
+                              "**Luzia:** Should I reuse existing research or run a fresh search?\n\n"
+                              f"Available past research:\n{options}\n\n"
+                              "Reply with a month label to reuse it, or **fresh** to research from scratch."
+                          )})
+            else:
+                on_event({"type": "alegria_message",
+                          "text": "**Luzia:** No past research found — starting fresh."})
+        elif t in ("tool_call", "tool_result", "thinking", "thinking_delta",
+                   "thinking_done", "phase_saved", "run_id", "injected",
+                   "performer_review"):
+            pass  # consumed internally or surfaced via get_user callbacks
+        else:
+            # Pass other events through (images, webflow links, etc.)
+            on_event(event)
+
+    def sub_check_pause():
+        return None
+
+    def sub_get_performer_review(performers):
+        if not performers:
+            return {"decisions": []}
+        lines = [
+            f"**Luzia found {len(performers)} unmatched performer(s).** "
+            "Reply **all** to include everyone, or type the numbers to **skip** (e.g. `2, 4`):",
+            "",
+        ]
+        for i, p in enumerate(performers, 1):
+            detail = " — ".join(filter(None, [p.get("show"), p.get("company"), p.get("country")]))
+            lines.append(f"{i}. **{p.get('name', '?')}**{(' — ' + detail) if detail else ''}")
+        on_event({"type": "alegria_message", "text": "\n".join(lines)})
+        on_event({"type": "alegria_waiting"})
+
+        user_resp = get_user_message() or ""
+        lower = user_resp.strip().lower()
+        if not lower or lower in ("all", "yes", "all of them", "include all", "include everyone"):
+            return {"decisions": [{"name": p["name"], "action": "add"} for p in performers]}
+
+        skip_nums = {int(n) for n in _re.findall(r'\d+', user_resp)}
+        return {"decisions": [
+            {"name": p["name"], "action": "skip" if (i in skip_nums) else "add"}
+            for i, p in enumerate(performers, 1)
+        ]}
+
+    def sub_get_user_input():
+        on_event({"type": "alegria_waiting"})
+        return get_user_message() or ""
+
+    try:
+        luzia_agent.run_with_callbacks(
+            month_label=month_label,
+            on_event=sub_on_event,
+            check_pause=sub_check_pause,
+            get_performer_review=sub_get_performer_review,
+            get_user_input=sub_get_user_input,
+            run_id=None,
+            replay_from=replay_from,
+            cached_run=cached_run,
+        )
+        return {"status": "completed", "month": month_label}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+def _run_kooza_inline(inp: dict, on_event, get_user_message) -> dict:
+    """Run Kooza inline, proxying its events and decisions through Alegría's chat."""
+    import re as _re
+    from . import kooza_agent
+
+    run_mode = inp.get("run_mode", "full")
+    prefs    = mem.get_icpdb_prefs()
+
+    def sub_on_event(event):
+        t = event.get("type", "")
+        if t == "phase":
+            on_event({"type": "alegria_message",
+                      "text": f"**Kooza — Phase {event.get('phase')}: {event.get('label', '')}**"})
+        elif t == "summary":
+            on_event({"type": "alegria_message", "text": event.get("text", "")})
+        elif t == "error":
+            on_event({"type": "alegria_message",
+                      "text": f"⚠ Kooza error: {event.get('message', '')}"})
+        elif t in ("tool_call", "tool_result", "thinking", "thinking_delta",
+                   "thinking_done", "phase_saved", "run_id",
+                   "update_proposals", "duplicate_proposals"):
+            pass
+        else:
+            on_event(event)
+
+    def sub_check_pause():
+        return None
+
+    def sub_get_update_decisions(proposals):
+        if not proposals:
+            return {"decisions": []}
+        # Detect whether these are update proposals or dedup groups
+        is_dedup = bool(proposals and proposals[0].get("secondary_id"))
+
+        if is_dedup:
+            lines = [
+                f"**Kooza found {len(proposals)} possible duplicate(s).** "
+                "Reply **all** to approve merging all, type numbers to approve specific ones, "
+                "or **none** to skip all:",
+                "",
+            ]
+            for i, g in enumerate(proposals, 1):
+                lines.append(
+                    f"{i}. **{g.get('primary_name', g.get('primary_id', '?'))}** ← keep "
+                    f"(merge with **{g.get('secondary_name', g.get('secondary_id', '?'))}**)"
+                )
+            on_event({"type": "alegria_message", "text": "\n".join(lines)})
+            on_event({"type": "alegria_waiting"})
+
+            user_resp = get_user_message() or ""
+            lower = user_resp.strip().lower()
+            if lower in ("none", "skip", "no", "skip all"):
+                return {"decisions": [
+                    {"primary_id": g["primary_id"], "secondary_id": g["secondary_id"], "approved": False}
+                    for g in proposals
+                ]}
+            if not lower or lower in ("all", "yes", "approve all", "merge all"):
+                return {"decisions": [
+                    {"primary_id": g["primary_id"], "secondary_id": g["secondary_id"], "approved": True}
+                    for g in proposals
+                ]}
+            approve_nums = {int(n) for n in _re.findall(r'\d+', user_resp)}
+            return {"decisions": [
+                {"primary_id": g["primary_id"], "secondary_id": g["secondary_id"],
+                 "approved": (i in approve_nums)}
+                for i, g in enumerate(proposals, 1)
+            ]}
+        else:
+            lines = [
+                f"**Kooza proposes {len(proposals)} update(s).** "
+                "Reply **all** to approve all, type numbers to approve specific ones, "
+                "or **none** to reject all:",
+                "",
+            ]
+            for i, p in enumerate(proposals, 1):
+                lines.append(
+                    f"{i}. **{p.get('performer_name', p.get('performer_id', '?'))}** — "
+                    f"{p.get('field', '?')}: `{p.get('proposed_value', '?')}`"
+                )
+            on_event({"type": "alegria_message", "text": "\n".join(lines)})
+            on_event({"type": "alegria_waiting"})
+
+            user_resp = get_user_message() or ""
+            lower = user_resp.strip().lower()
+            if lower in ("none", "skip", "no", "reject all"):
+                return {"decisions": [
+                    {"performer_id": p["performer_id"], "approved": False}
+                    for p in proposals
+                ]}
+            if not lower or lower in ("all", "yes", "approve all"):
+                return {"decisions": [
+                    {"performer_id": p["performer_id"], "approved": True}
+                    for p in proposals
+                ]}
+            approve_nums = {int(n) for n in _re.findall(r'\d+', user_resp)}
+            return {"decisions": [
+                {"performer_id": p["performer_id"], "approved": (i in approve_nums)}
+                for i, p in enumerate(proposals, 1)
+            ]}
+
+    try:
+        kooza_agent.run_with_callbacks(
+            on_event=sub_on_event,
+            check_pause=sub_check_pause,
+            get_update_decisions=sub_get_update_decisions,
+            run_mode=run_mode,
+            prefs=prefs,
+        )
+        return {"status": "completed", "run_mode": run_mode}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
 
 
 _NOOP_EVENT = lambda event: None
@@ -444,6 +708,14 @@ def run_with_callbacks(
                 result = _get_platform_status()
             elif name == "search_icpdb_performer":
                 result = notion_search_performer(inp.get("name", ""))
+            elif name == "run_luzia":
+                on_event({"type": "alegria_message",
+                          "text": f"Starting Luzia for **{inp.get('month_label', '')}**…"})
+                result = _run_luzia_inline(inp, on_event, get_user_message)
+            elif name == "run_kooza":
+                on_event({"type": "alegria_message",
+                          "text": f"Starting Kooza in **{inp.get('run_mode', 'full')}** mode…"})
+                result = _run_kooza_inline(inp, on_event, get_user_message)
             elif name == "suggest_agent":
                 on_event({
                     "type":   "agent_suggestion",
