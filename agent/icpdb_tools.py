@@ -81,7 +81,27 @@ def _has_value(prop: dict) -> bool:
     return bool(_prop_value(prop))
 
 
-# ── Main tools ────────────────────────────────────────────────────────────────
+def fetch_performer_fields(page_id: str) -> dict:
+    """Fetch a performer page and return all its field values as {field: value}."""
+    try:
+        resp = requests.get(
+            f"{cfg.NOTION_BASE}/pages/{page_id}",
+            headers=_notion_headers(),
+            timeout=30,
+        )
+        if not resp.ok:
+            return {}
+        page = resp.json()
+        props = page.get("properties", {})
+        result = {"url": page.get("url", "")}
+        for name, prop in props.items():
+            ptype = prop.get("type", "")
+            if ptype in _SKIP_TYPES:
+                continue
+            result[name] = _prop_value(prop)
+        return result
+    except Exception:
+        return {}
 
 def icpdb_audit() -> dict:
     """

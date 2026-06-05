@@ -18,6 +18,7 @@ from .icpdb_tools import (
     notion_update_performer,
     draft_outreach_messages,
     merge_performer_records,
+    fetch_performer_fields,
 )
 from . import memory as mem
 
@@ -380,7 +381,15 @@ def _loop(
             # ── propose_duplicate_resolutions: blocking review ────────────
             if tool_name == "propose_duplicate_resolutions":
                 groups = tool_input.get("groups", [])
-                on_event({"type": "duplicate_proposals", "groups": groups})
+                enriched = []
+                for g in groups:
+                    eg = dict(g)
+                    if g.get("primary_id"):
+                        eg["primary_fields"] = fetch_performer_fields(g["primary_id"])
+                    if g.get("secondary_id"):
+                        eg["secondary_fields"] = fetch_performer_fields(g["secondary_id"])
+                    enriched.append(eg)
+                on_event({"type": "duplicate_proposals", "groups": enriched})
                 decisions = get_update_decisions(groups)   # reuse the same queue
                 result_str = json.dumps(decisions)
                 tool_results.append({

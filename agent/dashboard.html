@@ -401,6 +401,12 @@
   .dedup-record-name a { color: var(--text); text-decoration: none; }
   .dedup-record-name a:hover { color: var(--purple); }
   .dedup-record-completeness { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+  .dedup-field-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .dedup-field-table th { padding: 5px 10px; background: var(--bg-deep); color: var(--muted); font-weight: 600; text-align: left; border-bottom: 1px solid var(--border); }
+  .dedup-field-table td { padding: 4px 10px; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: top; max-width: 220px; word-break: break-word; }
+  .dedup-field-table .dft-field { color: var(--muted); font-weight: 500; width: 130px; }
+  .dedup-field-table .dft-filled { color: var(--text); }
+  .dedup-field-table .dft-empty { color: var(--text-dim); opacity: .45; font-style: italic; }
   .dedup-rationale { padding: 10px 14px; font-size: 12px; color: var(--text-dim); border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 7px; }
   .dedup-rationale-icon { flex-shrink: 0; opacity: .7; }
   .dedup-actions { padding: 10px 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -1900,6 +1906,33 @@ function showDedupReviewPanel(groups) {
       ? `<a href="${esc(g.secondary_url)}" target="_blank">${esc(g.secondary_name || 'Unknown')}</a>`
       : esc(g.secondary_name || 'Unknown');
 
+    // Build field comparison table
+    function buildFieldTable(pf, sf) {
+      if (!pf && !sf) return '';
+      const fields = new Set([...Object.keys(pf || {}), ...Object.keys(sf || {})]);
+      // Remove url as it's already shown as a link
+      fields.delete('url');
+      if (!fields.size) return '';
+      let rows = '';
+      for (const f of [...fields].sort()) {
+        const pv = (pf || {})[f] || '';
+        const sv = (sf || {})[f] || '';
+        if (!pv && !sv) continue;
+        const pEmpty = !pv;
+        const sEmpty = !sv;
+        rows += `<tr>
+          <td class="dft-field">${esc(f)}</td>
+          <td class="dft-val ${pEmpty ? 'dft-empty' : 'dft-filled'}">${esc(pv || '—')}</td>
+          <td class="dft-val ${sEmpty ? 'dft-empty' : 'dft-filled'}">${esc(sv || '—')}</td>
+        </tr>`;
+      }
+      if (!rows) return '';
+      return `<table class="dedup-field-table">
+        <thead><tr><th>Field</th><th>Primary</th><th>Secondary</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    }
+
     const card = document.createElement('div');
     card.className = 'dedup-card';
     card.id = `dedup-card-${esc(gid)}`;
@@ -1913,14 +1946,13 @@ function showDedupReviewPanel(groups) {
         <div class="dedup-record">
           <div class="dedup-record-label primary">Keep (primary)</div>
           <div class="dedup-record-name">${primaryNameHtml}</div>
-          <div class="dedup-record-completeness">${esc(g.primary_completeness || '—')}</div>
         </div>
         <div class="dedup-record">
           <div class="dedup-record-label secondary">Archive (secondary)</div>
           <div class="dedup-record-name">${secondaryNameHtml}</div>
-          <div class="dedup-record-completeness">${esc(g.secondary_completeness || '—')}</div>
         </div>
       </div>
+      ${buildFieldTable(g.primary_fields, g.secondary_fields)}
       <div class="dedup-rationale">
         <span class="dedup-rationale-icon">💡</span>
         <span>${esc(g.rationale || '')}</span>
@@ -1960,16 +1992,17 @@ function showDedupReviewPanel(groups) {
     card.querySelector('.dedup-swap-link').addEventListener('click', () => {
       const d = icpdbDedupDecisions[gid];
       if (d?.action === 'merge') {
-        // swap primary ↔ secondary in both the decision and the displayed labels
         [d.primary_id, d.secondary_id] = [d.secondary_id, d.primary_id];
-        const labels = card.querySelectorAll('.dedup-record-label');
-        labels[0].textContent = 'Keep (primary)';
-        labels[1].textContent = 'Archive (secondary)';
         const names = card.querySelectorAll('.dedup-record-name');
-        const comps = card.querySelectorAll('.dedup-record-completeness');
-        // swap displayed content
-        const tmpName = names[0].innerHTML; names[0].innerHTML = names[1].innerHTML; names[1].innerHTML = tmpName;
-        const tmpComp = comps[0].innerHTML; comps[0].innerHTML = comps[1].innerHTML; comps[1].innerHTML = tmpComp;
+        const tmp = names[0].innerHTML; names[0].innerHTML = names[1].innerHTML; names[1].innerHTML = tmp;
+        // swap field table primary/secondary columns (col index 1 and 2)
+        card.querySelectorAll('.dedup-field-table tbody tr').forEach(row => {
+          const cells = row.querySelectorAll('td');
+          if (cells.length >= 3) {
+            const tmpH = cells[1].innerHTML; cells[1].innerHTML = cells[2].innerHTML; cells[2].innerHTML = tmpH;
+            const c1cls = cells[1].className; cells[1].className = cells[2].className; cells[2].className = c1cls;
+          }
+        });
       }
     });
 
