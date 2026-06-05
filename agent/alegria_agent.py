@@ -353,26 +353,26 @@ def run_with_callbacks(
                 messages=messages,
             ) as stream:
                 for event in stream:
-                    etype = type(event).__name__
+                    etype = getattr(event, "type", "")
 
-                    if etype == "ContentBlockStart":
+                    if etype == "content_block_start":
                         cb = getattr(event, "content_block", None)
                         if cb and getattr(cb, "type", "") == "tool_use":
                             current_tool = {"id": cb.id, "name": cb.name, "input": ""}
 
-                    elif etype == "ContentBlockDelta":
+                    elif etype == "content_block_delta":
                         delta = getattr(event, "delta", None)
                         if not delta:
                             continue
                         dtype = getattr(delta, "type", "")
                         if dtype == "text_delta":
-                            chunk = delta.text or ""
+                            chunk = getattr(delta, "text", "") or ""
                             full_text += chunk
                             on_event({"type": "alegria_delta", "text": chunk})
                         elif dtype == "input_json_delta" and current_tool is not None:
                             current_tool["input"] += getattr(delta, "partial_json", "")
 
-                    elif etype == "ContentBlockStop":
+                    elif etype == "content_block_stop":
                         if current_tool is not None:
                             try:
                                 current_tool["input"] = json.loads(current_tool["input"] or "{}")
