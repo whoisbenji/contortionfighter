@@ -34,8 +34,9 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config as cfg
 from . import memory as mem
-from .agent import run_with_callbacks
-from . import icpdb_agent
+from .luzia_agent import run_with_callbacks
+from . import kooza_agent
+from . import alegria_agent
 
 app = FastAPI(title="Contortion Space Agent Dashboard")
 
@@ -248,7 +249,7 @@ class ICPDBSession:
     def start(self, run_mode: str) -> None:
         def _run():
             try:
-                icpdb_agent.run_with_callbacks(
+                kooza_agent.run_with_callbacks(
                     on_event=self.on_event,
                     check_pause=self.check_pause,
                     get_update_decisions=self.get_update_decisions,
@@ -351,6 +352,102 @@ async def get_icpdb_stats():
         "last_audit": audit,
         "last_run": {k: v for k, v in last_run.items() if k not in ("audit",)} if last_run else None,
     })
+
+
+# ── Alegría session ───────────────────────────────────────────────────────────
+
+class AlegriaSession:
+    def __init__(self, ws: WebSocket):
+        self.ws = ws
+        self.outbox:   queue.Queue[dict | None] = queue.Queue()
+        self.msg_inbox: queue.Queue[str | None] = queue.Queue()  # blocking user replies
+        self.interject_inbox: queue.Queue[str]  = queue.Queue()  # non-blocking interjections
+        self.thread: threading.Thread | None = None
+
+    def on_event(self, event: dict) -> None:
+        self.outbox.put(event)
+
+    def check_pause(self) -> str | None:
+        try:
+            return self.interject_inbox.get_nowait()
+        except queue.Empty:
+            return None
+
+    def get_user_message(self) -> str | None:
+        return self.msg_inbox.get()
+
+    def start(self, initial_message: str) -> None:
+        def _run():
+            try:
+                alegria_agent.run_with_callbacks(
+                    on_event=self.on_event,
+                    check_pause=self.check_pause,
+                    get_user_message=self.get_user_message,
+                    initial_message=initial_message,
+                )
+            except Exception as exc:
+                self.outbox.put({"type": "error", "message": str(exc)})
+            finally:
+                self.outbox.put(None)
+
+        self.thread = threading.Thread(target=_run, daemon=True)
+        self.thread.start()
+
+
+# ── Alegría WebSocket endpoint ────────────────────────────────────────────────
+
+@app.websocket("/ws/alegria")
+async def alegria_websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    session: AlegriaSession | None = None
+    loop = asyncio.get_event_loop()
+
+    try:
+        raw = await ws.receive_text()
+        msg = json.loads(raw)
+
+        if msg.get("type") != "start":
+            await ws.send_text(json.dumps({"type": "error", "message": "First message must be {type:'start', message:'...'}"}))
+            return
+
+        initial_message = msg.get("message", "Hello! What can you help me with today?").strip()
+        session = AlegriaSession(ws)
+        session.start(initial_message)
+
+        await ws.send_text(json.dumps({"type": "started"}))
+
+        async def _pump_outbox():
+            while True:
+                event = await loop.run_in_executor(None, session.outbox.get)
+                if event is None:
+                    await ws.send_text(json.dumps({"type": "done"}))
+                    break
+                await ws.send_text(json.dumps(event))
+
+        async def _receive_controls():
+            while True:
+                try:
+                    raw = await ws.receive_text()
+                    ctrl = json.loads(raw)
+                    t = ctrl.get("type")
+                    if t == "message":
+                        session.msg_inbox.put(ctrl.get("message", ""))
+                    elif t == "interject":
+                        session.interject_inbox.put(ctrl.get("message", ""))
+                except WebSocketDisconnect:
+                    session.msg_inbox.put(None)
+                    break
+
+        await asyncio.gather(_pump_outbox(), _receive_controls())
+
+    except WebSocketDisconnect:
+        if session:
+            session.msg_inbox.put(None)
+    except Exception as exc:
+        try:
+            await ws.send_text(json.dumps({"type": "error", "message": str(exc)}))
+        except Exception:
+            pass
 
 
 @app.get("/")

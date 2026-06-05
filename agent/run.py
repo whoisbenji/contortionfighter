@@ -20,7 +20,7 @@ import os
 import sys
 from datetime import datetime
 
-from .agent import run
+from .luzia_agent import run
 
 
 def _current_month_label() -> str:
