@@ -104,10 +104,10 @@
   .alegria-memory-toast { align-self: center; font-size: 11px; color: var(--muted); background: var(--bg2); border: 1px solid var(--border); border-radius: 999px; padding: 3px 12px; opacity: 0; animation: fadeInOut 3s ease forwards; }
   @keyframes fadeInOut { 0%{opacity:0} 15%{opacity:1} 70%{opacity:1} 100%{opacity:0} }
   .alegria-date-divider { align-self: center; font-size: 10px; color: var(--text-dim); padding: 4px 12px; background: var(--bg2); border-radius: 999px; margin: 4px 0; }
-  .alegria-input-bar { display: flex; gap: 8px; padding: 16px 0 20px; border-top: 1px solid var(--border); }
-  .alegria-input { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; padding: 9px 14px; outline: none; transition: border-color .15s; }
+  .alegria-input-bar { display: flex; align-items: flex-end; gap: 8px; padding: 16px 0 20px; border-top: 1px solid var(--border); }
+  .alegria-input { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; padding: 9px 14px; outline: none; transition: border-color .15s; resize: none; min-height: 44px; max-height: 200px; line-height: 1.5; overflow-y: auto; font-family: inherit; }
   .alegria-input:focus { border-color: var(--purple); }
-  #alegria-send-btn { flex-shrink: 0; padding: 9px 18px; font-size: 13px; border-radius: 8px; white-space: nowrap; }
+  #alegria-send-btn { flex-shrink: 0; padding: 9px 18px; font-size: 13px; border-radius: 8px; white-space: nowrap; align-self: flex-end; }
   .alegria-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 0 0; }
   .alegria-new-btn { background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: 11px; padding: 4px 10px; cursor: pointer; transition: all .15s; }
   .alegria-new-btn:hover { border-color: var(--red); color: var(--red); }
@@ -559,7 +559,7 @@
     </div>
     <div class="alegria-chat" id="alegria-chat"></div>
     <div class="alegria-input-bar">
-      <input type="text" id="alegria-input" class="alegria-input" placeholder="Ask Alegría anything…" autocomplete="off" />
+      <textarea id="alegria-input" class="alegria-input" placeholder="Ask Alegría anything…" autocomplete="off" rows="1"></textarea>
       <button class="btn btn-primary" id="alegria-send-btn">Send</button>
     </div>
   </div>
@@ -2516,10 +2516,18 @@ function alegriaSend() {
   if (!msg || !alegriaConnected) return;
   alegriaAddBubble('user', msg);
   alegriaInput.value = '';
+  alegriaInput.style.height = 'auto';
   alegriaInput.disabled = true;
   alegriaBtn.disabled = true;
   alegriaWs.send(JSON.stringify({ type: 'message', message: msg }));
 }
+
+function alegriaAutoResize() {
+  alegriaInput.style.height = 'auto';
+  alegriaInput.style.height = Math.min(alegriaInput.scrollHeight, 200) + 'px';
+}
+
+alegriaInput.addEventListener('input', alegriaAutoResize);
 
 alegriaBtn.addEventListener('click', alegriaSend);
 alegriaInput.addEventListener('keydown', e => {
