@@ -50,9 +50,10 @@ app.mount("/output", StaticFiles(directory=str(_output_dir)), name="output")
 class AgentSession:
     def __init__(self, ws: WebSocket):
         self.ws = ws
-        self.outbox:      queue.Queue[dict | None] = queue.Queue()
-        self.inbox:       queue.Queue[str]         = queue.Queue()
-        self.review_inbox: queue.Queue[dict]       = queue.Queue()
+        self.outbox:       queue.Queue[dict | None] = queue.Queue()
+        self.inbox:        queue.Queue[str]         = queue.Queue()
+        self.review_inbox: queue.Queue[dict]        = queue.Queue()
+        self.user_input_inbox: queue.Queue[str]     = queue.Queue()
         self.pause_requested = threading.Event()
         self.thread: threading.Thread | None = None
 
@@ -76,6 +77,9 @@ class AgentSession:
     def get_performer_review(self, performers: list[dict]) -> dict:
         return self.review_inbox.get()
 
+    def get_user_input(self) -> str:
+        return self.user_input_inbox.get()
+
     def start(self, month_label: str, run_id: str | None,
               replay_from: int, cached_run: dict | None) -> None:
         def _run():
@@ -85,6 +89,7 @@ class AgentSession:
                     on_event=self.on_event,
                     check_pause=self.check_pause,
                     get_performer_review=self.get_performer_review,
+                    get_user_input=self.get_user_input,
                     run_id=run_id,
                     replay_from=replay_from,
                     cached_run=cached_run,
@@ -160,6 +165,8 @@ async def websocket_endpoint(ws: WebSocket):
                             pass
                     elif t == "performer_decisions":
                         session.review_inbox.put({"decisions": ctrl.get("decisions", [])})
+                    elif t == "user_input":
+                        session.user_input_inbox.put(ctrl.get("message", ""))
                 except WebSocketDisconnect:
                     break
 

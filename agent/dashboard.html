@@ -270,6 +270,21 @@
 
   /* ── Interject bar ── */
   .interject-bar { border-top: 1px solid var(--border); background: var(--bg2); padding: 14px 24px; display: flex; flex-direction: column; gap: 8px; }
+
+  /* ── Research question card ── */
+  .research-q-card { background: rgba(155,77,255,.07); border: 1px solid var(--purple-dim); border-radius: var(--radius); margin: 4px 0; overflow: hidden; animation: fadeSlideIn .2s ease; }
+  .research-q-header { padding: 12px 16px 8px; display: flex; align-items: center; gap: 10px; }
+  .research-q-title { font-size: 13px; font-weight: 700; color: var(--purple); }
+  .research-q-body { padding: 0 16px 14px; font-size: 12px; color: var(--text-dim); }
+  .research-runs-list { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
+  .research-run-btn { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 12px; text-align: left; color: var(--text); transition: border-color .15s; }
+  .research-run-btn:hover { border-color: var(--purple); }
+  .research-run-label { font-weight: 600; }
+  .research-run-date { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+  .research-run-link { font-size: 11px; color: var(--cyan); text-decoration: none; margin-left: 8px; }
+  .research-run-link:hover { text-decoration: underline; }
+  .research-no-btn { padding: 8px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--muted); text-align: center; transition: border-color .15s; }
+  .research-no-btn:hover { border-color: var(--red); color: var(--red); }
   .interject-hint { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
   .interject-hint.paused-hint { color: var(--yellow); }
   .interject-row { display: flex; gap: 10px; }
@@ -1032,6 +1047,75 @@ function addFeedThinking() { addThinking(feed); }
 function addIcpdbEntry(cls, icon, title, body, collapsible) { addEntry(icpdbFeed, cls, icon, title, body, collapsible); }
 function addIcpdbThinking() { addThinking(icpdbFeed); }
 
+// ── Research question card ────────────────────────────────────────────────────
+function showResearchQuestion(pastRuns) {
+  const card = document.createElement('div');
+  card.className = 'research-q-card';
+  card.id = 'research-q-card';
+
+  const runRowsHtml = pastRuns.length
+    ? pastRuns.map(r => `
+        <button class="research-run-btn" data-run-id="${esc(r.run_id)}" data-month="${esc(r.month_label)}">
+          <span class="research-run-label">${esc(r.month_label)}</span>
+          <span style="display:flex;align-items:center;gap:6px">
+            <span class="research-run-date">${esc(r.created_at)}</span>
+            ${r.notion_url ? `<a class="research-run-link" href="${esc(r.notion_url)}" target="_blank" onclick="event.stopPropagation()">View ↗</a>` : ''}
+          </span>
+        </button>`).join('')
+    : `<div style="font-size:12px;color:var(--muted);padding:6px 0">No previous research found.</div>`;
+
+  card.innerHTML = `
+    <div class="research-q-header">
+      <span style="font-size:18px">📚</span>
+      <span class="research-q-title">Should I use existing research?</span>
+    </div>
+    <div class="research-q-body">
+      <div>Click a past run to reuse its research, or type a custom answer below. The agent will skip Phase 1 web searches and use the selected research directly.</div>
+      <div class="research-runs-list">
+        ${runRowsHtml}
+        <button class="research-no-btn" id="research-no-btn">✕ No — run fresh research</button>
+      </div>
+    </div>`;
+
+  const feedEl = feed;
+  const empty = feedEl.querySelector('.empty-state');
+  if (empty) empty.style.display = 'none';
+  feedEl.appendChild(card);
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Activate the interject bar for custom input
+  interjectBar.style.display = '';
+  interjectInput.value = '';
+  interjectInput.className = 'interject-input';
+  sendBtn.textContent = 'Send';
+  interjectHint.textContent = 'Or type a custom answer (e.g. "Yes, use June 2026 — focus on European shows only")';
+  interjectHint.className = 'interject-hint';
+
+  // Handle clicking a past run
+  card.querySelectorAll('.research-run-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const runId    = btn.dataset.runId;
+      const month    = btn.dataset.month;
+      const message  = `Yes — use the research from ${month} (run_id: ${runId})`;
+      sendUserInput(message);
+      card.remove();
+    });
+  });
+
+  document.getElementById('research-no-btn').addEventListener('click', () => {
+    sendUserInput('No — run fresh research');
+    card.remove();
+  });
+}
+
+function sendUserInput(message) {
+  if (!ws) return;
+  ws.send(JSON.stringify({ type: 'user_input', message }));
+  addFeedEntry('injected', '💬', 'Your answer', message);
+  interjectBar.style.display = 'none';
+  setStatus('running', 'Research…');
+}
+
 // ── History (review) ──────────────────────────────────────────────────────────
 historyToggle.addEventListener('click', () => {
   historyVisible = !historyVisible;
@@ -1210,6 +1294,10 @@ function handleMessage(data) {
     case 'phase_saved':
       addFeedEntry('tool-result ok', '💾', `Phase ${data.phase} saved`, 'Phase output cached for replay.');
       break;
+    case 'research_question':
+      setStatus('paused', 'Awaiting input');
+      showResearchQuestion(data.past_runs || []);
+      break;
     case 'performer_review':
       setStatus('paused', 'Awaiting review');
       addFeedEntry('paused', '👤', 'Performer review needed', `${data.performers.length} performer(s) not found in ICPDB — see below.`);
@@ -1333,6 +1421,15 @@ pauseBtn.addEventListener('click', () => {
 function sendInterject() {
   const msg = interjectInput.value.trim();
   if (!ws) return;
+  // If a research question card is open, route as user_input instead
+  const rqCard = document.getElementById('research-q-card');
+  if (rqCard) {
+    if (!msg) return;
+    sendUserInput(msg);
+    rqCard.remove();
+    interjectInput.value = '';
+    return;
+  }
   if (agentPaused) {
     ws.send(JSON.stringify({ type: 'resume', message: msg }));
   } else {

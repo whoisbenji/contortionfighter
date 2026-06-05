@@ -34,6 +34,34 @@ MAX_TOKENS = 8192
 
 TOOLS: list[dict] = [
     {
+        "name": "ask_about_existing_research",
+        "description": (
+            "Ask the user whether they want to use previously saved research instead of "
+            "running new web searches. Call this FIRST before any Phase 1 work. "
+            "Returns the user's text response."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "load_existing_research",
+        "description": (
+            "Load the saved research content from a previous run. "
+            "Use the run_id returned from ask_about_existing_research. "
+            "Returns the full research markdown so you can proceed directly to Phase 2."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string", "description": "The run ID to load research from."},
+            },
+            "required": ["run_id"],
+        },
+    },
+    {
         "name": "web_search",
         "description": (
             "Search the web for information about contortion performances, circus shows, "
@@ -240,7 +268,24 @@ TOOLS: list[dict] = [
 
 # ── Tool dispatcher ───────────────────────────────────────────────────────────
 
+def load_existing_research(run_id: str) -> dict:
+    """Load research content from a past run."""
+    run = mem.get_run(run_id)
+    if not run:
+        return {"error": f"Run '{run_id}' not found."}
+    research = run.get("research")
+    if not research:
+        return {"error": f"Run '{run_id}' has no saved research."}
+    return {
+        "run_id":           run_id,
+        "month_label":      run.get("month_label", ""),
+        "notion_url":       research.get("notion_url", ""),
+        "content_markdown": research.get("content_markdown", ""),
+    }
+
+
 TOOL_FUNCTIONS = {
+    "load_existing_research":         load_existing_research,
     "web_search": web_search,
     "notion_create_research_page": notion_create_research_page,
     "notion_list_performers_in_icpdb": notion_list_performers_in_icpdb,
@@ -317,6 +362,8 @@ def _stream_response(client, on_event, **kwargs):
 # ── Phase detection ───────────────────────────────────────────────────────────
 
 TOOL_PHASE_MAP = {
+    "ask_about_existing_research":     (1, "Research"),
+    "load_existing_research":          (1, "Research"),
     "web_search":                      (1, "Research"),
     "notion_create_research_page":     (1, "Research"),
     "notion_list_performers_in_icpdb": (2, "Performer Matching"),
@@ -331,9 +378,10 @@ TOOL_PHASE_MAP = {
     "webflow_create_blog_draft":       (5, "Publishing to Webflow"),
 }
 
-_NOOP_EVENT  = lambda event: None
-_NOOP_PAUSE  = lambda: None
-_NOOP_REVIEW = lambda performers: {"decisions": [{"name": p["name"], "action": "skip"} for p in performers]}
+_NOOP_EVENT      = lambda event: None
+_NOOP_PAUSE      = lambda: None
+_NOOP_REVIEW     = lambda performers: {"decisions": [{"name": p["name"], "action": "skip"} for p in performers]}
+_NOOP_USER_INPUT = lambda: "no"
 
 
 # ── Phase output extraction ───────────────────────────────────────────────────
@@ -377,6 +425,7 @@ def _loop(
     on_event,
     check_pause,
     get_performer_review,
+    get_user_input,
     run_id: str,
     verbose: bool,
     tools_override: list[dict] | None = None,
@@ -439,6 +488,34 @@ def _loop(
 
             if verbose:
                 print(f"\n🔧 {tool_name}: {json.dumps(tool_input)[:200]}")
+
+            # ── Ask about existing research: block for user input ─────────
+            if tool_name == "ask_about_existing_research":
+                past_runs = [
+                    {
+                        "run_id":      r["id"],
+                        "month_label": r.get("month_label", ""),
+                        "created_at":  r.get("created_at", "")[:10],
+                        "notion_url":  r.get("research", {}).get("notion_url", "") if r.get("research") else "",
+                    }
+                    for r in mem.load_all_runs()
+                    if r.get("research") and r.get("status") == "completed"
+                ]
+                on_event({"type": "research_question", "past_runs": past_runs})
+                user_answer = get_user_input()
+                result = {"answer": user_answer, "past_runs": past_runs}
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": block.id,
+                    "content":     json.dumps(result),
+                })
+                on_event({
+                    "type":   "tool_result",
+                    "tool":   tool_name,
+                    "result": f"User answered: {user_answer[:200]}",
+                    "ok":     True,
+                })
+                continue
 
             # ── Performer review: block until user responds ───────────────
             if tool_name == "request_performer_review":
@@ -540,7 +617,7 @@ def run(month_label: str, verbose: bool = True) -> str:
     if verbose:
         print(f"\n🤸 Starting performance review agent for {month_label}\n{'─'*60}")
     try:
-        result = _loop(month_label, messages, _NOOP_EVENT, _NOOP_PAUSE, _NOOP_REVIEW, run_id, verbose)
+        result = _loop(month_label, messages, _NOOP_EVENT, _NOOP_PAUSE, _NOOP_REVIEW, _NOOP_USER_INPUT, run_id, verbose)
         mem.complete_run(run_id)
         return result
     except Exception as exc:
@@ -553,6 +630,7 @@ def run_with_callbacks(
     on_event,
     check_pause,
     get_performer_review,
+    get_user_input=None,
     run_id: str | None = None,
     replay_from: int = 1,
     cached_run: dict | None = None,
@@ -573,6 +651,8 @@ def run_with_callbacks(
     # When replaying, restrict available tools to only phases >= replay_from
     # so the model can't accidentally re-run earlier phases
     phase_tool_min = {
+        "ask_about_existing_research": 1,
+        "load_existing_research":      1,
         "web_search": 1,
         "notion_create_research_page": 1,
         "notion_list_performers_in_icpdb": 2,
@@ -593,9 +673,20 @@ def run_with_callbacks(
               "label": {1:"Research",2:"Performer Matching",3:"Image Generation",
                         4:"Writing Article",5:"Publishing to Webflow"}.get(start_phase,"Working")})
 
+    _get_user_input = get_user_input if get_user_input is not None else _NOOP_USER_INPUT
+
+    # ask_about_existing_research is only meaningful for a fresh run (not replay)
+    active_tools_with_ask = active_tools
+    if replay_from <= 1:
+        ask_tools = [t for t in TOOLS if t["name"] in ("ask_about_existing_research", "load_existing_research")]
+        existing_names = {t["name"] for t in active_tools}
+        active_tools_with_ask = ask_tools + [t for t in active_tools if t["name"] not in {at["name"] for at in ask_tools}]
+    else:
+        active_tools_with_ask = active_tools
+
     try:
         result = _loop(month_label, messages, on_event, check_pause, get_performer_review,
-                       run_id, verbose=False, tools_override=active_tools)
+                       _get_user_input, run_id, verbose=False, tools_override=active_tools_with_ask)
         mem.complete_run(run_id)
         on_event({"type": "history_updated"})
         return result

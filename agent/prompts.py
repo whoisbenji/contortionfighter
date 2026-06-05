@@ -227,9 +227,16 @@ Once all phases are complete, summarise what was done:
 def phase_prompt(month_label: str) -> str:
     return (
         f"Please produce the monthly contortion performance review for **{month_label}**.\n\n"
-        "Follow the full five-phase workflow. For Phase 1, run both the discovery pass "
-        "(all 16 regions) and the verification pass (confirm performer names and Instagram "
-        "handles) before saving the research document.\n\n"
+        "**Before starting Phase 1**, call `ask_about_existing_research` to check whether the user "
+        "wants to reuse previously saved research. Wait for the user's reply.\n\n"
+        "- If the user says **yes** (or references a past run/month), call `load_existing_research` "
+        "with the run_id they specify (it is included in the tool result). "
+        "Treat the loaded `content_markdown` as your completed Phase 1 research — do NOT run web "
+        "searches, do NOT call `notion_create_research_page`. Proceed directly to Phase 2 using "
+        "the loaded research.\n"
+        "- If the user says **no** or does not specify a run, proceed with the full Phase 1 "
+        "two-pass research workflow (all 16 regions, verification pass, save to Notion).\n\n"
+        "After resolving Phase 1, follow the full remaining workflow (Phase 2–5).\n\n"
         "Do not ask for clarification — make reasonable editorial decisions and proceed."
     )
 
