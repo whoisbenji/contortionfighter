@@ -16,7 +16,7 @@ from typing import Any
 
 import anthropic
 
-from .tools import web_search, notion_search_performer
+from .tools import web_search, notion_search_performer, notion_search_pages, notion_fetch_page
 from . import memory as mem
 
 MODEL = "claude-sonnet-4-6"
@@ -71,7 +71,8 @@ You are the editor-in-chief's right hand. Help with:
 1. **Content strategy** — which performers to feature, regions to cover, angles to pursue, \
    what stories are emerging in the contortion world
 2. **Research** — look up performers in the ICPDB, search the web for current information \
-   about shows, performers, competitions, and circus news
+   about shows, performers, competitions, and circus news; read any Notion page by URL or \
+   search for pages by keyword using notion_search and notion_fetch_page
 3. **Drafting** — social media captions, outreach emails, pitch ideas, interview questions, \
    Instagram Story copy, newsletter blurbs
 4. **Run coordination** — running Luzia or Kooza directly when asked, reviewing their \
@@ -265,6 +266,39 @@ TOOLS: list[dict] = [
                 "name": {"type": "string", "description": "Performer name to search for"},
             },
             "required": ["name"],
+        },
+    },
+    {
+        "name": "notion_search",
+        "description": (
+            "Search Notion for pages by keyword. Returns a list of matching pages with "
+            "their titles, IDs and URLs. Use before notion_fetch_page to find the right page."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "notion_fetch_page",
+        "description": (
+            "Fetch the full content of a Notion page — title, all properties, and body text. "
+            "Accepts a page ID or a notion.so URL. Use to read articles, research notes, "
+            "ICPDB records, or any other Notion content for context. "
+            "After reading, you can use save_memory to retain key facts for future sessions."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "page_id_or_url": {
+                    "type": "string",
+                    "description": "Notion page ID (UUID) or full notion.so URL",
+                },
+            },
+            "required": ["page_id_or_url"],
         },
     },
     {
@@ -706,6 +740,10 @@ def run_with_callbacks(
                 result = web_search(inp.get("query", ""))
             elif name == "get_platform_status":
                 result = _get_platform_status()
+            elif name == "notion_search":
+                result = notion_search_pages(inp.get("query", ""))
+            elif name == "notion_fetch_page":
+                result = notion_fetch_page(inp.get("page_id_or_url", ""))
             elif name == "search_icpdb_performer":
                 result = notion_search_performer(inp.get("name", ""))
             elif name == "run_luzia":

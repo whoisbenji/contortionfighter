@@ -191,7 +191,174 @@ def notion_search_performer(name: str) -> dict:
     return {"matches": matches}
 
 
-def notion_list_performers_in_icpdb(limit: int = 200) -> dict:
+def notion_search_pages(query: str, page_size: int = 10) -> dict:
+    """Search all Notion pages/databases the integration can access."""
+    resp = requests.post(
+        f"{cfg.NOTION_BASE}/search",
+        headers=_notion_headers(),
+        json={
+            "query": query,
+            "filter": {"value": "page", "property": "object"},
+            "page_size": page_size,
+        },
+        timeout=30,
+    )
+    _raise_for(resp)
+    results = []
+    for page in resp.json().get("results", []):
+        props = page.get("properties", {})
+        # Try common title property names
+        title = ""
+        for key in ("title", "Name", "Contortionist name", "Title"):
+            prop = props.get(key, {})
+            texts = prop.get("title", prop.get("rich_text", []))
+            if texts:
+                title = texts[0].get("plain_text", "")
+                break
+        if not title:
+            title = page.get("url", page["id"])
+        results.append({
+            "id": page["id"],
+            "title": title,
+            "url": page.get("url", ""),
+            "last_edited": page.get("last_edited_time", "")[:10],
+        })
+    return {"results": results}
+
+
+def _blocks_to_text(blocks: list[dict], indent: int = 0) -> str:
+    """Convert Notion block objects to plain readable text."""
+    lines = []
+    prefix = "  " * indent
+    for block in blocks:
+        btype = block.get("type", "")
+        content = block.get(btype, {})
+
+        # Extract rich text
+        rich = content.get("rich_text", [])
+        text = "".join(t.get("plain_text", "") for t in rich)
+
+        if btype == "paragraph":
+            if text:
+                lines.append(prefix + text)
+        elif btype in ("heading_1", "heading_2", "heading_3"):
+            level = btype[-1]
+            lines.append(prefix + "#" * int(level) + " " + text)
+        elif btype == "bulleted_list_item":
+            lines.append(prefix + "• " + text)
+        elif btype == "numbered_list_item":
+            lines.append(prefix + "1. " + text)
+        elif btype == "to_do":
+            done = "✓" if content.get("checked") else "☐"
+            lines.append(prefix + f"{done} {text}")
+        elif btype == "quote":
+            lines.append(prefix + "> " + text)
+        elif btype == "callout":
+            emoji = (content.get("icon") or {}).get("emoji", "")
+            lines.append(prefix + f"{emoji} {text}".strip())
+        elif btype == "code":
+            lang = content.get("language", "")
+            lines.append(prefix + f"```{lang}\n{text}\n```")
+        elif btype == "divider":
+            lines.append(prefix + "---")
+        elif btype == "child_page":
+            title = content.get("title", "")
+            lines.append(prefix + f"[sub-page: {title}]")
+
+        # Recurse into children if already fetched
+        children = block.get("children", [])
+        if children:
+            lines.append(_blocks_to_text(children, indent + 1))
+
+    return "\n".join(filter(None, lines))
+
+
+def notion_fetch_page(page_id_or_url: str, max_blocks: int = 200) -> dict:
+    """
+    Fetch a Notion page's title, properties and body text.
+    Accepts either a page ID or a notion.so URL.
+    Returns {title, url, properties, body_text}.
+    """
+    # Extract ID from URL if needed
+    page_id = page_id_or_url.strip()
+    if "notion.so" in page_id:
+        # URLs end with the page ID (32 hex chars, possibly with dashes)
+        parts = page_id.rstrip("/").split("/")
+        last = parts[-1]
+        # ID may be after the last '-'
+        raw_id = last.split("-")[-1] if "-" in last else last
+        if len(raw_id) == 32:
+            page_id = raw_id
+    # Normalise to UUID format if bare 32-char hex
+    if len(page_id) == 32 and "-" not in page_id:
+        page_id = f"{page_id[:8]}-{page_id[8:12]}-{page_id[12:16]}-{page_id[16:20]}-{page_id[20:]}"
+
+    # Fetch page metadata
+    page_resp = requests.get(
+        f"{cfg.NOTION_BASE}/pages/{page_id}",
+        headers=_notion_headers(),
+        timeout=30,
+    )
+    _raise_for(page_resp)
+    page = page_resp.json()
+
+    # Extract title from properties
+    title = ""
+    props_out: dict[str, str] = {}
+    for key, prop in page.get("properties", {}).items():
+        ptype = prop.get("type", "")
+        if ptype == "title":
+            texts = prop.get("title", [])
+            val = "".join(t.get("plain_text", "") for t in texts)
+            title = val
+            props_out[key] = val
+        elif ptype == "rich_text":
+            texts = prop.get("rich_text", [])
+            val = "".join(t.get("plain_text", "") for t in texts)
+            if val:
+                props_out[key] = val
+        elif ptype in ("select", "status"):
+            sel = prop.get(ptype) or {}
+            if sel.get("name"):
+                props_out[key] = sel["name"]
+        elif ptype == "multi_select":
+            vals = [s["name"] for s in prop.get("multi_select", []) if s.get("name")]
+            if vals:
+                props_out[key] = ", ".join(vals)
+        elif ptype == "date":
+            d = prop.get("date") or {}
+            if d.get("start"):
+                props_out[key] = d["start"]
+        elif ptype == "url":
+            if prop.get("url"):
+                props_out[key] = prop["url"]
+        elif ptype == "checkbox":
+            props_out[key] = "yes" if prop.get("checkbox") else "no"
+        elif ptype == "number":
+            if prop.get("number") is not None:
+                props_out[key] = str(prop["number"])
+
+    # Fetch block content
+    blocks_resp = requests.get(
+        f"{cfg.NOTION_BASE}/blocks/{page_id}/children",
+        headers=_notion_headers(),
+        params={"page_size": max_blocks},
+        timeout=30,
+    )
+    _raise_for(blocks_resp)
+    blocks = blocks_resp.json().get("results", [])
+    body_text = _blocks_to_text(blocks)
+
+    return {
+        "title": title,
+        "url": page.get("url", ""),
+        "properties": props_out,
+        "body_text": body_text[:8000],  # cap for context window
+        "block_count": len(blocks),
+    }
+
+
+
     """Returns all performers in the ICPDB (up to `limit`) with id, name, instagram."""
     all_results = []
     has_more = True
