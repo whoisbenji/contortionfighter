@@ -311,8 +311,11 @@ def run_with_callbacks(
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-    # Load persisted history
-    history = mem.load_alegria_messages()
+    # Load persisted history — trim any leading assistant messages (API requires user first)
+    raw_history = mem.load_alegria_messages()
+    while raw_history and raw_history[0]["role"] != "user":
+        raw_history = raw_history[1:]
+    history: list[dict] = raw_history
     messages: list[dict] = list(history)
 
     is_first_turn = len(messages) == 0
@@ -403,8 +406,8 @@ def run_with_callbacks(
         if not tool_uses:
             # Persist this exchange (text only) and wait for next user message
             if is_first_turn and full_text:
-                # Don't persist the internal greeting prompt — just the assistant reply
-                _persist_exchange([], full_text, history)
+                # Don't persist the greeting — it's driven by an internal prompt,
+                # not a real user message. History must start with a user message.
                 is_first_turn = False
             elif full_text and len(messages) >= 2:
                 last_user = messages[-2] if messages[-2]["role"] == "user" else None
