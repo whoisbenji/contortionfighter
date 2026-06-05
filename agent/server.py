@@ -376,14 +376,14 @@ class AlegriaSession:
     def get_user_message(self) -> str | None:
         return self.msg_inbox.get()
 
-    def start(self, initial_message: str) -> None:
+    def start(self, fresh: bool = False) -> None:
         def _run():
             try:
                 alegria_agent.run_with_callbacks(
                     on_event=self.on_event,
                     check_pause=self.check_pause,
                     get_user_message=self.get_user_message,
-                    initial_message=initial_message,
+                    fresh=fresh,
                 )
             except Exception as exc:
                 self.outbox.put({"type": "error", "message": str(exc)})
@@ -392,6 +392,19 @@ class AlegriaSession:
 
         self.thread = threading.Thread(target=_run, daemon=True)
         self.thread.start()
+
+
+# ── Alegría REST endpoints ────────────────────────────────────────────────────
+
+@app.get("/api/alegria/history")
+async def get_alegria_history():
+    return JSONResponse(mem.get_alegria_history_for_display())
+
+
+@app.post("/api/alegria/clear")
+async def clear_alegria_history():
+    mem.clear_alegria_history()
+    return JSONResponse({"ok": True})
 
 
 # ── Alegría WebSocket endpoint ────────────────────────────────────────────────
@@ -407,12 +420,12 @@ async def alegria_websocket_endpoint(ws: WebSocket):
         msg = json.loads(raw)
 
         if msg.get("type") != "start":
-            await ws.send_text(json.dumps({"type": "error", "message": "First message must be {type:'start', message:'...'}"}))
+            await ws.send_text(json.dumps({"type": "error", "message": "First message must be {type:'start'}"}))
             return
 
-        initial_message = msg.get("message", "Hello! What can you help me with today?").strip()
+        fresh = bool(msg.get("fresh", False))
         session = AlegriaSession(ws)
-        session.start(initial_message)
+        session.start(fresh=fresh)
 
         await ws.send_text(json.dumps({"type": "started"}))
 

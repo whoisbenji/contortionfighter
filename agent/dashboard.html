@@ -101,10 +101,16 @@
   .alegria-suggestion-reason { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.5; }
   .alegria-suggestion-btn { background: var(--purple); color: #fff; border: none; border-radius: 8px; padding: 7px 16px; font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
   .alegria-suggestion-btn:hover { opacity: .85; }
+  .alegria-memory-toast { align-self: center; font-size: 11px; color: var(--muted); background: var(--bg2); border: 1px solid var(--border); border-radius: 999px; padding: 3px 12px; opacity: 0; animation: fadeInOut 3s ease forwards; }
+  @keyframes fadeInOut { 0%{opacity:0} 15%{opacity:1} 70%{opacity:1} 100%{opacity:0} }
+  .alegria-date-divider { align-self: center; font-size: 10px; color: var(--text-dim); padding: 4px 12px; background: var(--bg2); border-radius: 999px; margin: 4px 0; }
   .alegria-input-bar { display: flex; gap: 8px; padding: 16px 0 20px; border-top: 1px solid var(--border); }
   .alegria-input { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; padding: 9px 14px; outline: none; transition: border-color .15s; }
   .alegria-input:focus { border-color: var(--purple); }
   #alegria-send-btn { flex-shrink: 0; padding: 9px 18px; font-size: 13px; border-radius: 8px; white-space: nowrap; }
+  .alegria-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 0 0; }
+  .alegria-new-btn { background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: 11px; padding: 4px 10px; cursor: pointer; transition: all .15s; }
+  .alegria-new-btn:hover { border-color: var(--red); color: var(--red); }
 
   /* ── Overview screen ── */
   .overview-screen { grid-area: overview-screen; overflow-y: auto; padding: 32px; }
@@ -543,8 +549,13 @@
   <!-- ── Alegría screen ── -->
   <div class="alegria-screen" id="alegria-screen">
     <div class="alegria-header">
-      <div class="alegria-title">✦ <span>Alegría</span></div>
-      <div class="alegria-subtitle">Contortion Space master coordinator — ask anything, or let me route you to Luzia or Kooza</div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between">
+        <div>
+          <div class="alegria-title">✦ <span>Alegría</span></div>
+          <div class="alegria-subtitle">Your Contortion Space assistant — ask anything, plan content, or launch Luzia and Kooza</div>
+        </div>
+        <button class="alegria-new-btn" id="alegria-new-btn" title="Start a new conversation">New conversation</button>
+      </div>
     </div>
     <div class="alegria-chat" id="alegria-chat"></div>
     <div class="alegria-input-bar">
@@ -2331,18 +2342,18 @@ loadAdminFields();
 loadIcpdbPrefs();
 loadOverview();
 
-// ── Alegría ───────────────────────────────────────────────────────────────────
+// ── Alegría ──────────────────────────────────────────────────────────────────
 
 function renderMd(text) {
-  // Minimal Markdown: bold, inline code, links, line breaks
   return text
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
-    .replace(/\n\n/g, '</p><p>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,.08);padding:1px 5px;border-radius:3px;font-size:.9em">$1</code>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\n\n/g, '</p><p style="margin:8px 0 0">')
     .replace(/\n/g, '<br>')
-    .replace(/^/, '<p>').replace(/$/, '</p>');
+    .replace(/^/, '<p style="margin:0">').replace(/$/, '</p>');
 }
 
 let alegriaWs = null;
@@ -2350,43 +2361,51 @@ let alegriaConnected = false;
 let alegriaStreamBubble = null;
 let alegriaStreamText = '';
 
-const alegriaChat  = document.getElementById('alegria-chat');
-const alegriaInput = document.getElementById('alegria-input');
-const alegriaBtn   = document.getElementById('alegria-send-btn');
+const alegriaChat   = document.getElementById('alegria-chat');
+const alegriaInput  = document.getElementById('alegria-input');
+const alegriaBtn    = document.getElementById('alegria-send-btn');
+const alegriaNewBtn = document.getElementById('alegria-new-btn');
 
-function ensureAlegriaConnected() {
-  if (alegriaConnected || alegriaWs) return;
-  alegriaWs = new WebSocket(`ws://${location.host}/ws/alegria`);
-
-  alegriaWs.onopen = () => {
-    alegriaConnected = true;
-    alegriaWs.send(JSON.stringify({
-      type: 'start',
-      message: 'Hello! Give me a brief welcome — one or two sentences — and let me know what you can help with. Be warm but concise.'
-    }));
-  };
-
-  alegriaWs.onmessage = ev => {
-    const data = JSON.parse(ev.data);
-    handleAlegriaMessage(data);
-  };
-
-  alegriaWs.onerror = () => {
-    alegriaAddBubble('agent', '⚠ Could not connect to Alegría. Is the server running?');
-  };
-
-  alegriaWs.onclose = () => {
-    alegriaConnected = false;
-    alegriaWs = null;
-  };
+async function loadAlegriaHistory() {
+  try {
+    const history = await fetch('/api/alegria/history').then(r => r.json());
+    if (!history || !history.length) return false;
+    const divider = document.createElement('div');
+    divider.className = 'alegria-date-divider';
+    divider.textContent = 'Previous conversation';
+    alegriaChat.appendChild(divider);
+    history.forEach(m => {
+      if (m.role === 'user' || m.role === 'assistant') {
+        alegriaAddBubble(m.role === 'user' ? 'user' : 'agent', m.content, false);
+      }
+    });
+    const sep = document.createElement('div');
+    sep.className = 'alegria-date-divider';
+    sep.textContent = '— now —';
+    alegriaChat.appendChild(sep);
+    alegriaChat.scrollTop = alegriaChat.scrollHeight;
+    return true;
+  } catch { return false; }
 }
 
-function alegriaAddBubble(role, text) {
+function ensureAlegriaConnected(fresh = false) {
+  if (alegriaConnected || alegriaWs) return;
+  alegriaWs = new WebSocket(`ws://${location.host}/ws/alegria`);
+  alegriaWs.onopen = () => {
+    alegriaConnected = true;
+    alegriaWs.send(JSON.stringify({ type: 'start', fresh }));
+  };
+  alegriaWs.onmessage = ev => handleAlegriaMessage(JSON.parse(ev.data));
+  alegriaWs.onerror = () => alegriaAddBubble('agent', '⚠ Could not connect to Alegría. Is the server running?');
+  alegriaWs.onclose = () => { alegriaConnected = false; alegriaWs = null; };
+}
+
+function alegriaAddBubble(role, text, scroll = true) {
   const el = document.createElement('div');
   el.className = `alegria-bubble ${role}`;
   el.innerHTML = renderMd(text);
   alegriaChat.appendChild(el);
-  alegriaChat.scrollTop = alegriaChat.scrollHeight;
+  if (scroll) alegriaChat.scrollTop = alegriaChat.scrollHeight;
   return el;
 }
 
@@ -2396,7 +2415,6 @@ function alegriaAddThinking() {
   el.textContent = 'Alegría is thinking…';
   alegriaChat.appendChild(el);
   alegriaChat.scrollTop = alegriaChat.scrollHeight;
-  return el;
 }
 
 function alegriaRemoveThinking() {
@@ -2416,10 +2434,8 @@ function alegriaAddSuggestion(agent, reason, params) {
   el.querySelector('.alegria-suggestion-btn').addEventListener('click', () => {
     if (agent === 'luzia') {
       switchScreen('review');
-      if (params && params.month_label) {
-        document.getElementById('month-input').value = params.month_label;
-      }
-    } else if (agent === 'kooza') {
+      if (params && params.month_label) document.getElementById('month-input').value = params.month_label;
+    } else {
       switchScreen('icpdb');
       if (params && params.run_mode) {
         const sel = document.getElementById('icpdb-mode-select');
@@ -2431,13 +2447,21 @@ function alegriaAddSuggestion(agent, reason, params) {
   alegriaChat.scrollTop = alegriaChat.scrollHeight;
 }
 
+function alegriaShowMemoryToast(note) {
+  const el = document.createElement('div');
+  el.className = 'alegria-memory-toast';
+  el.textContent = `✶ Memory saved: "${note.length > 60 ? note.slice(0, 60) + '…' : note}"`;
+  alegriaChat.appendChild(el);
+  alegriaChat.scrollTop = alegriaChat.scrollHeight;
+  setTimeout(() => el.remove(), 3500);
+}
+
 function handleAlegriaMessage(data) {
   switch (data.type) {
     case 'thinking':
       alegriaRemoveThinking();
       alegriaAddThinking();
       break;
-
     case 'alegria_delta':
       alegriaRemoveThinking();
       if (!alegriaStreamBubble) {
@@ -2447,10 +2471,9 @@ function handleAlegriaMessage(data) {
         alegriaStreamText = '';
       }
       alegriaStreamText += data.text;
-      alegriaStreamBubble.innerHTML = marked.parse ? marked.parse(alegriaStreamText) : alegriaStreamText;
+      alegriaStreamBubble.innerHTML = renderMd(alegriaStreamText);
       alegriaChat.scrollTop = alegriaChat.scrollHeight;
       break;
-
     case 'alegria_message':
       alegriaRemoveThinking();
       if (alegriaStreamBubble) {
@@ -2461,27 +2484,26 @@ function handleAlegriaMessage(data) {
         alegriaAddBubble('agent', data.text);
       }
       break;
-
     case 'agent_suggestion':
       alegriaAddSuggestion(data.agent, data.reason, data.params || {});
       break;
-
+    case 'alegria_memory_saved':
+      alegriaShowMemoryToast(data.note || '');
+      break;
     case 'alegria_waiting':
       alegriaRemoveThinking();
       alegriaInput.disabled = false;
       alegriaBtn.disabled = false;
       alegriaInput.focus();
       break;
-
     case 'tool_call':
-      // Silently handled — no UI noise for tool calls in Alegría
       break;
-
     case 'error':
       alegriaRemoveThinking();
       alegriaAddBubble('agent', `⚠ Error: ${data.message}`);
+      alegriaInput.disabled = false;
+      alegriaBtn.disabled = false;
       break;
-
     case 'done':
       alegriaConnected = false;
       alegriaWs = null;
@@ -2500,10 +2522,23 @@ function alegriaSend() {
 }
 
 alegriaBtn.addEventListener('click', alegriaSend);
-alegriaInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); alegriaSend(); } });
+alegriaInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); alegriaSend(); }
+});
 
-// Auto-connect Alegría on load (it's the default screen)
-ensureAlegriaConnected();
+alegriaNewBtn.addEventListener('click', async () => {
+  if (!confirm('Start a new conversation? This will clear the current chat history.')) return;
+  await fetch('/api/alegria/clear', { method: 'POST' });
+  alegriaChat.innerHTML = '';
+  if (alegriaWs) { alegriaWs.close(); alegriaWs = null; alegriaConnected = false; }
+  alegriaStreamBubble = null; alegriaStreamText = '';
+  ensureAlegriaConnected(true);
+});
+
+(async () => {
+  await loadAlegriaHistory();
+  ensureAlegriaConnected(false);
+})();
 
 </script>
 </body>

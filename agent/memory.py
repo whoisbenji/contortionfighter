@@ -243,3 +243,67 @@ def image_url(abs_path: str | None) -> str | None:
         return f"/output/{rel.as_posix()}"
     except ValueError:
         return None
+
+
+# ── Alegría conversation memory ───────────────────────────────────────────────
+
+ALEGRIA_HISTORY_FILE = Path(__file__).parent / "alegria_history.json"
+ALEGRIA_MEMORIES_FILE = Path(__file__).parent / "alegria_memories.json"
+
+_MAX_HISTORY = 80   # messages to persist
+_LOAD_LIMIT  = 60   # messages to load into context
+
+
+def save_alegria_messages(messages: list[dict]) -> None:
+    """Persist the last _MAX_HISTORY text-only user/assistant messages."""
+    text_only = [m for m in messages if isinstance(m.get("content"), str)]
+    kept = text_only[-_MAX_HISTORY:]
+    ALEGRIA_HISTORY_FILE.write_text(
+        json.dumps(kept, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def load_alegria_messages() -> list[dict]:
+    """Return up to _LOAD_LIMIT persisted messages."""
+    if not ALEGRIA_HISTORY_FILE.exists():
+        return []
+    try:
+        msgs = json.loads(ALEGRIA_HISTORY_FILE.read_text(encoding="utf-8"))
+        return msgs[-_LOAD_LIMIT:]
+    except Exception:
+        return []
+
+
+def clear_alegria_history() -> None:
+    ALEGRIA_HISTORY_FILE.write_text("[]", encoding="utf-8")
+
+
+def save_alegria_memory(text: str) -> None:
+    """Append a memory note (key fact or preference) for future sessions."""
+    memories: list[dict] = []
+    if ALEGRIA_MEMORIES_FILE.exists():
+        try:
+            memories = json.loads(ALEGRIA_MEMORIES_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    memories.append({"text": text, "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+    ALEGRIA_MEMORIES_FILE.write_text(
+        json.dumps(memories[-50:], indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def load_alegria_memories() -> list[str]:
+    """Return all saved memory notes as plain strings."""
+    if not ALEGRIA_MEMORIES_FILE.exists():
+        return []
+    try:
+        return [m["text"] for m in json.loads(ALEGRIA_MEMORIES_FILE.read_text(encoding="utf-8"))
+                if isinstance(m, dict) and m.get("text")]
+    except Exception:
+        return []
+
+
+def get_alegria_history_for_display() -> list[dict]:
+    """Return history with role+content for the dashboard to render."""
+    return load_alegria_messages()
+
