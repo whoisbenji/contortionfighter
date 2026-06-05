@@ -208,6 +208,19 @@
 
   .entry.thinking { background: rgba(255,255,255,.02); }
   .entry.thinking .entry-text { color: var(--muted); font-style: italic; }
+
+  /* ── Reasoning stream block ── */
+  .reasoning-block { background: rgba(255,255,255,.02); border: 1px solid var(--border); border-radius: var(--radius); margin: 4px 0; overflow: hidden; animation: fadeSlideIn .15s ease; }
+  .reasoning-header { display: flex; align-items: center; gap: 8px; padding: 8px 14px; cursor: pointer; user-select: none; font-size: 12px; color: var(--text-dim); }
+  .reasoning-header:hover { background: rgba(255,255,255,.03); }
+  .reasoning-toggle { font-size: 10px; transition: transform .2s; flex-shrink: 0; }
+  .reasoning-header.open .reasoning-toggle { transform: rotate(90deg); }
+  .reasoning-label { flex: 1; }
+  .reasoning-cursor { display: inline-block; width: 7px; height: 12px; background: var(--purple); border-radius: 1px; margin-left: 2px; animation: blink .8s step-end infinite; vertical-align: middle; }
+  .reasoning-cursor.done { display: none; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+  .reasoning-body { padding: 10px 14px 12px; font-size: 12px; line-height: 1.6; color: var(--text-dim); font-family: var(--font-mono); white-space: pre-wrap; word-break: break-word; border-top: 1px solid var(--border); display: none; max-height: 320px; overflow-y: auto; }
+  .reasoning-body.visible { display: block; }
   .entry.phase-change { background: rgba(155,77,255,.08); border-color: var(--purple-dim); }
   .entry.phase-change .entry-tool { color: var(--purple); font-size: 13px; }
   .entry.tool-call { background: rgba(0,229,204,.04); border-color: rgba(0,229,204,.1); }
@@ -442,6 +455,7 @@
     <div class="header-right">
       <div id="status-dot"></div>
       <span id="status-label">Idle</span>
+      <button class="btn-icon" id="reasoning-toggle-btn" title="Show/hide agent reasoning" style="font-size:11px;padding:4px 8px;border-radius:10px;opacity:.6">🧠 Reasoning</button>
       <button class="btn-icon" id="gallery-btn" title="Image Gallery">🖼</button>
       <button class="btn-icon" id="admin-btn" title="Admin Settings">⚙️</button>
     </div>
@@ -781,6 +795,21 @@ function esc(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── Reasoning visibility ─────────────────────────────────────────────────────
+let reasoningVisible = false;
+const reasoningToggleBtn = document.getElementById('reasoning-toggle-btn');
+
+reasoningToggleBtn.addEventListener('click', () => {
+  reasoningVisible = !reasoningVisible;
+  reasoningToggleBtn.style.opacity = reasoningVisible ? '1' : '.6';
+  reasoningToggleBtn.style.background = reasoningVisible ? 'rgba(155,77,255,.15)' : '';
+  reasoningToggleBtn.style.border     = reasoningVisible ? '1px solid var(--purple-dim)' : '';
+  // Show/hide all existing reasoning blocks
+  document.querySelectorAll('.reasoning-block').forEach(b => {
+    b.style.display = reasoningVisible ? '' : 'none';
+  });
+});
+
 // ── Navigation ────────────────────────────────────────────────────────────────
 document.querySelectorAll('.nav-tab').forEach(tab => {
   tab.addEventListener('click', () => switchScreen(tab.dataset.screen));
@@ -948,6 +977,51 @@ function addThinking(feedEl) {
   e.innerHTML = `<div class="entry-icon">🧠</div><div class="entry-body"><div class="entry-text"><span class="dots">Thinking</span></div></div>`;
   feedEl.appendChild(e);
   feedEl.scrollTop = feedEl.scrollHeight;
+}
+
+// Create or update a streaming reasoning block in a feed.
+// Returns the block element so callers can keep a reference.
+function getOrCreateReasoningBlock(feedEl, blockId) {
+  let block = feedEl.querySelector(`[data-reasoning-id="${CSS.escape(blockId)}"]`);
+  if (!block) {
+    // Remove the spinner if present
+    const thinking = feedEl.querySelector('.entry.thinking');
+    if (thinking) thinking.remove();
+
+    block = document.createElement('div');
+    block.className = 'reasoning-block';
+    block.dataset.reasoningId = blockId;
+    block.style.display = reasoningVisible ? '' : 'none';
+    block.innerHTML = `
+      <div class="reasoning-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('visible')">
+        <span class="reasoning-toggle">▶</span>
+        <span class="reasoning-label">🧠 Agent reasoning</span>
+        <span class="reasoning-cursor" id="rc-${CSS.escape(blockId)}"></span>
+      </div>
+      <div class="reasoning-body"></div>`;
+    feedEl.appendChild(block);
+  }
+  return block;
+}
+
+function appendReasoningChunk(feedEl, blockId, text) {
+  const block = getOrCreateReasoningBlock(feedEl, blockId);
+  const body = block.querySelector('.reasoning-body');
+  body.textContent += text;
+  if (reasoningVisible) feedEl.scrollTop = feedEl.scrollHeight;
+}
+
+function finaliseReasoningBlock(feedEl, blockId) {
+  const block = feedEl.querySelector(`[data-reasoning-id="${CSS.escape(blockId)}"]`);
+  if (!block) return;
+  const cursor = block.querySelector('.reasoning-cursor');
+  if (cursor) cursor.classList.add('done');
+  // Auto-expand if reasoning is visible
+  if (reasoningVisible) {
+    const header = block.querySelector('.reasoning-header');
+    const body   = block.querySelector('.reasoning-body');
+    if (header && body) { header.classList.add('open'); body.classList.add('visible'); }
+  }
 }
 
 // Wrappers for review screen
@@ -1118,6 +1192,8 @@ function handleMessage(data) {
       addFeedEntry('phase-change', '▶', 'Started', `Running agent for ${data.month}${data.replay_from > 1 ? ` (from Phase ${data.replay_from})` : ''}`);
       break;
     case 'thinking': addFeedThinking(); break;
+    case 'thinking_delta': appendReasoningChunk(feed, data.id, data.text); break;
+    case 'thinking_done':  finaliseReasoningBlock(feed, data.id); break;
     case 'phase':
       setPhase(data.phase);
       addFeedEntry('phase-change', '📍', `Phase ${data.phase}`, data.label);
@@ -1360,6 +1436,8 @@ function handleIcpdbMessage(data) {
       addIcpdbEntry('phase-change', '▶', 'Started', `ICPDB Maintenance — mode: ${data.run_mode}`);
       break;
     case 'thinking': addIcpdbThinking(); break;
+    case 'thinking_delta': appendReasoningChunk(icpdbFeed, data.id, data.text); break;
+    case 'thinking_done':  finaliseReasoningBlock(icpdbFeed, data.id); break;
     case 'phase':
       setIcpdbPhase(data.phase);
       addIcpdbEntry('phase-change', '📍', `Phase ${data.phase}`, data.label);

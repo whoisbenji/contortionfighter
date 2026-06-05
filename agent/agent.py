@@ -282,6 +282,38 @@ def _create_message_with_retry(client, **kwargs):
                 raise
 
 
+def _stream_response(client, on_event, **kwargs):
+    """Stream a response, emitting thinking_delta events for text tokens."""
+    delays = [10, 30, 60, 120]
+    for attempt, delay in enumerate(delays + [None]):
+        try:
+            thinking_id = f"thinking-{int(time.time()*1000)}"
+            text_buf = []
+            with client.messages.stream(**kwargs) as stream:
+                for event in stream:
+                    if (
+                        event.type == "content_block_delta"
+                        and hasattr(event, "delta")
+                        and getattr(event.delta, "type", "") == "text_delta"
+                    ):
+                        chunk = event.delta.text
+                        if chunk:
+                            text_buf.append(chunk)
+                            on_event({"type": "thinking_delta", "id": thinking_id, "text": chunk})
+            if text_buf:
+                on_event({"type": "thinking_done", "id": thinking_id})
+            return stream.get_final_message()
+        except anthropic.RateLimitError:
+            if delay is None:
+                raise
+            time.sleep(delay)
+        except anthropic.APIStatusError as exc:
+            if exc.status_code == 429 and delay is not None:
+                time.sleep(delay)
+            else:
+                raise
+
+
 # ── Phase detection ───────────────────────────────────────────────────────────
 
 TOOL_PHASE_MAP = {
@@ -360,8 +392,9 @@ def _loop(
     while True:
         on_event({"type": "thinking"})
 
-        response = _create_message_with_retry(
+        response = _stream_response(
             client,
+            on_event,
             model=MODEL,
             max_tokens=MAX_TOKENS,
             system=SYSTEM_PROMPT,
@@ -433,8 +466,9 @@ def _loop(
                     "Please take this into account and adjust your next action accordingly."
                 )})
                 on_event({"type": "thinking"})
-                rethink = _create_message_with_retry(
+                rethink = _stream_response(
                     client,
+                    on_event,
                     model=MODEL,
                     max_tokens=MAX_TOKENS,
                     system=SYSTEM_PROMPT,
