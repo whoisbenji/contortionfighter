@@ -559,8 +559,8 @@
     </div>
     <div class="alegria-chat" id="alegria-chat"></div>
     <div class="alegria-input-bar">
-      <textarea id="alegria-input" class="alegria-input" placeholder="Ask Alegría anything…" autocomplete="off" rows="1"></textarea>
-      <button class="btn btn-primary" id="alegria-send-btn">Send</button>
+      <textarea id="alegria-input" class="alegria-input" placeholder="Ask Alegría anything…" autocomplete="off" rows="1" disabled></textarea>
+      <button class="btn btn-primary" id="alegria-send-btn" disabled>Send</button>
     </div>
   </div>
 
@@ -2505,8 +2505,13 @@ function handleAlegriaMessage(data) {
       alegriaBtn.disabled = false;
       break;
     case 'done':
+      alegriaRemoveThinking();
       alegriaConnected = false;
       alegriaWs = null;
+      // Re-enable input and reconnect so the conversation can continue
+      alegriaInput.disabled = false;
+      alegriaBtn.disabled = false;
+      setTimeout(() => ensureAlegriaConnected(false), 400);
       break;
   }
 }
