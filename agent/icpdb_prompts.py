@@ -17,15 +17,16 @@ Only record verifiable information. Mark confidence as high/medium/low.
 Do not guess or fabricate.
 
 PHASE 2b — DEDUPLICATION ANALYSIS (only when run_mode is deduplicate)
-When run_mode is deduplicate, instead of Phase 2 research:
-Examine the duplicate groups returned by the audit (both exact and suspected).
-For each group, decide:
-  - recommendation: "merge" if they are clearly the same person, "keep_both" if they are distinct
-  - primary_id: which record to keep (prefer the one with more data filled in)
-  - secondary_id: which record to archive
-  - rationale: explain your reasoning (e.g. "identical name and same Instagram handle", "similar name but different nationalities — likely different people")
-  - primary_completeness / secondary_completeness: brief summary of what each record contains
-Call propose_duplicate_resolutions() with ALL groups at once.
+When run_mode is deduplicate, after the audit you MUST call propose_duplicate_resolutions().
+This is not optional — call it even if there are few duplicates or you are uncertain.
+Examine the duplicate groups in the audit result (fields: duplicates.exact and duplicates.suspected).
+For EACH group decide:
+  - recommendation: "merge" if they are clearly the same person, "keep_both" if they seem distinct
+  - primary_id: the page ID to keep (prefer the record with more data; use the first performer's id if unsure)
+  - secondary_id: the page ID to archive
+  - rationale: one sentence explaining your choice
+  - primary_completeness / secondary_completeness: brief comma-separated list of key fields that are filled
+Then call propose_duplicate_resolutions() with ALL groups in a single call. Do NOT stop before calling it.
 
 PHASE 3 — REVIEW
 Call propose_performer_updates() with ALL findings from Phase 2 as a single list.
@@ -55,7 +56,14 @@ def audit_prompt(run_mode: str = "full", prefs: dict | None = None) -> str:
         "audit_only": "Run Phase 1 (Audit) only. Report findings and stop.",
         "outreach": "Run Phase 1 (Audit) to identify performers needing outreach, then Phase 5 (Outreach) only.",
         "research_only": "Run Phase 1 (Audit), Phase 2 (Research), Phase 3 (Review), Phase 4 (Apply). Skip outreach.",
-        "deduplicate": "Run Phase 1 (Audit) to identify all duplicates, then Phase 2b (Deduplication Analysis) — analyse each duplicate group, form a recommendation, and call propose_duplicate_resolutions() with all groups. After user decisions, Phase 4 (Merge) — call merge_performer_records() for each approved merge.",
+        "deduplicate": (
+            "Run Phase 1 (Audit) only. "
+            "Then IMMEDIATELY call propose_duplicate_resolutions() — you MUST call this tool even if you are uncertain. "
+            "Pass every duplicate group from the audit (both exact and suspected) with your recommendation "
+            "(merge or keep_both), chosen primary_id, secondary_id, and a brief rationale. "
+            "Do NOT skip this step. Do NOT summarise and stop — call the tool. "
+            "After the user returns decisions, call merge_performer_records() for each approved merge."
+        ),
     }
     instruction = modes.get(run_mode, modes["full"])
     prompt = f"Please maintain the ICPDB. {instruction}"

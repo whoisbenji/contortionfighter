@@ -438,6 +438,19 @@ def _loop(
                     on_event({"type": "phase_saved", "phase": 1})
                 on_event({"type": "audit_metrics", **audit_data})
 
+                # Build a compact result for the model: strip the full
+                # performers_needing_update list (can be 400+ items) and replace it
+                # with just a count and top-10 sample.  The duplicate groups must
+                # remain intact so the model can analyse them.
+                pnu = result.get("performers_needing_update", [])
+                result_for_model = {
+                    **result,
+                    "performers_needing_update_count": len(pnu),
+                    "performers_needing_update":       pnu[:10],  # top-10 sample only
+                }
+            else:
+                result_for_model = result
+
             if tool_name == "notion_update_performer" and "error" not in result and run_id:
                 _updated_fields_total += len(result.get("updated_fields", []))
 
@@ -461,7 +474,7 @@ def _loop(
             tool_results.append({
                 "type":        "tool_result",
                 "tool_use_id": block.id,
-                "content":     json.dumps(result),
+                "content":     json.dumps(result_for_model),
             })
 
         if tool_results:
