@@ -279,18 +279,26 @@ def notion_fetch_page(page_id_or_url: str, max_blocks: int = 200) -> dict:
     Accepts either a page ID or a notion.so URL.
     Returns {title, url, properties, body_text}.
     """
-    # Extract ID from URL if needed
+    # Extract and normalise the page ID
     page_id = page_id_or_url.strip()
-    if "notion.so" in page_id:
-        # URLs end with the page ID (32 hex chars, possibly with dashes)
-        parts = page_id.rstrip("/").split("/")
-        last = parts[-1]
-        # ID may be after the last '-'
-        raw_id = last.split("-")[-1] if "-" in last else last
-        if len(raw_id) == 32:
-            page_id = raw_id
-    # Normalise to UUID format if bare 32-char hex
-    if len(page_id) == 32 and "-" not in page_id:
+
+    # Strip query params / fragments
+    page_id = re.split(r'[?#]', page_id)[0].rstrip("/")
+
+    # If it looks like a URL, pull the 32-char hex ID out with a regex
+    if "notion.so" in page_id or "/" in page_id:
+        # Match a UUID with dashes (standard Notion format)
+        m = re.search(r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', page_id)
+        if m:
+            page_id = m.group(1)
+        else:
+            # Match 32 bare hex chars at the end of the last path segment
+            m = re.search(r'([0-9a-f]{32})(?:[^0-9a-f]|$)', page_id)
+            if m:
+                raw = m.group(1)
+                page_id = f"{raw[:8]}-{raw[8:12]}-{raw[12:16]}-{raw[16:20]}-{raw[20:]}"
+    elif len(page_id) == 32 and re.fullmatch(r'[0-9a-f]{32}', page_id):
+        # Bare 32-char hex ID — format as UUID
         page_id = f"{page_id[:8]}-{page_id[8:12]}-{page_id[12:16]}-{page_id[16:20]}-{page_id[20:]}"
 
     # Fetch page metadata
