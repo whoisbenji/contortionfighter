@@ -278,6 +278,20 @@
   .dots::after { content: '...'; animation: dots 1.2s steps(4, end) infinite; }
   @keyframes dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} 100%{content:''} }
 
+  /* ── Photo check panel ── */
+  .photo-check-header { font-size: 13px; font-weight: 700; color: var(--purple); }
+  .photo-check-sub { font-size: 11px; color: var(--muted); font-family: var(--font-mono); margin-top: -4px; }
+  .photo-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+  .photo-card { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 72px; }
+  .photo-card img { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+  .photo-card .no-photo { width: 60px; height: 60px; background: var(--bg3); border-radius: 8px; border: 2px dashed var(--border); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .photo-card .photo-name { font-size: 10px; color: var(--muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 72px; }
+  .photo-missing-row { display: flex; flex-direction: column; gap: 6px; }
+  .photo-missing-item { display: flex; align-items: center; gap: 10px; }
+  .photo-missing-name { font-size: 12px; font-weight: 600; min-width: 120px; }
+  .photo-missing-input { flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 12px; color: var(--text); font-family: var(--font-mono); }
+  .photo-missing-input:focus { outline: none; border-color: var(--purple); }
+
   /* ── Performer review ── */
   .performer-review-panel { border-top: 1px solid var(--border); background: var(--bg2); padding: 16px 24px; display: flex; flex-direction: column; gap: 12px; max-height: 380px; overflow-y: auto; }
   .pr-title { font-size: 13px; font-weight: 700; color: var(--yellow); }
@@ -602,6 +616,7 @@
         <p>Enter a month and click <strong>Run Agent</strong> to generate your monthly performance review.<br><br>Or expand <strong>Past Runs</strong> to replay or refine a previous run.</p>
       </div>
     </div>
+    <div id="photo-check-panel" style="display:none" class="performer-review-panel"></div>
     <div id="performer-review" style="display:none" class="performer-review-panel">
       <div class="pr-title">👤 Performers not in ICPDB</div>
       <div class="pr-subtitle">Review each performer — Add to ICPDB or Skip. Fill in Instagram handles where known.</div>
@@ -1359,6 +1374,11 @@ function handleMessage(data) {
       setStatus('paused', 'Awaiting input');
       showResearchQuestion(data.past_runs || []);
       break;
+    case 'photo_check':
+      setStatus('paused', 'Awaiting photo review');
+      addFeedEntry('paused', '🖼', 'Photo check', `${data.performers.length} performer(s) — ${data.missing_count} missing photo${data.missing_count !== 1 ? 's' : ''}.`);
+      showPhotoCheckPanel(data.performers, data.missing_count);
+      break;
     case 'performer_review':
       setStatus('paused', 'Awaiting review');
       addFeedEntry('paused', '👤', 'Performer review needed', `${data.performers.length} performer(s) not found in ICPDB — see below.`);
@@ -1411,6 +1431,64 @@ function handleMessage(data) {
       agentRunning = false; runBtn.disabled = false; pauseBtn.disabled = true; icpdbRunBtn.disabled = false;
       break;
   }
+}
+
+// ── Photo check panel ─────────────────────────────────────────────────────────
+function showPhotoCheckPanel(performers, missingCount) {
+  const panel = document.getElementById('photo-check-panel');
+  const withPhotos  = performers.filter(p => p.has_photo);
+  const withMissing = performers.filter(p => !p.has_photo);
+
+  panel.innerHTML = `
+    <div class="photo-check-header">🖼 ${performers.length} performer${performers.length !== 1 ? 's' : ''} attached to this article</div>
+    <div class="photo-check-sub">${withPhotos.length} have a Main photo · ${missingCount} missing</div>
+
+    ${withPhotos.length ? `
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Have photos</div>
+    <div class="photo-grid">
+      ${withPhotos.map(p => `
+        <div class="photo-card">
+          <img src="${esc(p.photo_url)}" alt="${esc(p.name)}" onerror="this.style.display='none'">
+          <span class="photo-name" title="${esc(p.name)}">${esc(p.name)}</span>
+        </div>`).join('')}
+    </div>` : ''}
+
+    ${withMissing.length ? `
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Missing photos — provide image URLs</div>
+    <div class="photo-missing-row" id="photo-missing-inputs">
+      ${withMissing.map(p => `
+        <div class="photo-missing-item">
+          <span class="photo-missing-name">${esc(p.name)}</span>
+          <input class="photo-missing-input" type="url" placeholder="https://…" data-page-id="${esc(p.page_id)}">
+        </div>`).join('')}
+    </div>` : ''}
+
+    <div class="pr-submit-row">
+      <button class="btn btn-success" id="photo-provide-btn">${missingCount ? 'Provide & continue' : 'Continue'}</button>
+      ${missingCount ? `<button class="btn btn-muted" id="photo-skip-btn">Skip missing & continue</button>` : ''}
+    </div>
+  `;
+
+  function submitUrls(urls) {
+    ws.send(JSON.stringify({ type: 'photo_urls', urls }));
+    panel.style.display = 'none';
+    setStatus('running', 'Generating images…');
+  }
+
+  panel.querySelector('#photo-provide-btn').addEventListener('click', () => {
+    const urls = {};
+    panel.querySelectorAll('.photo-missing-input').forEach(inp => {
+      const val = inp.value.trim();
+      if (val) urls[inp.dataset.pageId] = val;
+    });
+    submitUrls(urls);
+  });
+
+  const skipBtn = panel.querySelector('#photo-skip-btn');
+  if (skipBtn) skipBtn.addEventListener('click', () => submitUrls({}));
+
+  panel.style.display = 'flex';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // ── Performer review ──────────────────────────────────────────────────────────

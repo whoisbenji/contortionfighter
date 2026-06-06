@@ -665,6 +665,29 @@ def _rich_text(text: str) -> list[dict]:
 
 # ── Image generation ──────────────────────────────────────────────────────────
 
+def set_performer_photo(page_id: str, image_url: str) -> dict:
+    """Set the 'Main photo' on an ICPDB performer page to an external image URL."""
+    payload = {
+        "properties": {
+            "Main photo": {
+                "files": [{
+                    "type": "external",
+                    "name": "photo",
+                    "external": {"url": image_url},
+                }]
+            }
+        }
+    }
+    resp = requests.patch(
+        f"{cfg.NOTION_BASE}/pages/{page_id}",
+        headers=_notion_headers(),
+        json=payload,
+        timeout=30,
+    )
+    _raise_for(resp)
+    return {"ok": True, "page_id": page_id}
+
+
 def generate_images(month_label: str, performer_page_ids: list[str]) -> dict:
     from .compositor import generate_and_upload_images
     return generate_and_upload_images(month_label, performer_page_ids)

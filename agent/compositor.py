@@ -275,6 +275,57 @@ def _notion_headers() -> dict:
     }
 
 
+def check_performer_photos(performer_ids: list[str]) -> list[dict]:
+    """
+    For each performer ID fetch their name and Main photo URL — without downloading images.
+    Returns list of {page_id, name, has_photo, photo_url}.
+    """
+    results: list[dict] = []
+    for page_id in performer_ids[:16]:
+        try:
+            resp = requests.get(
+                f"{NOTION_BASE}/pages/{page_id}",
+                headers=_notion_headers(),
+                timeout=15,
+            )
+            resp.raise_for_status()
+            page  = resp.json()
+            props = page.get("properties", {})
+
+            # Extract name from whichever property is the title
+            name = ""
+            for prop in props.values():
+                if prop.get("type") == "title":
+                    texts = prop.get("title", [])
+                    name = texts[0].get("plain_text", "") if texts else ""
+                    break
+
+            files = props.get("Main photo", {}).get("files", [])
+            photo_url: str | None = None
+            if files:
+                f = files[0]
+                if f.get("type") == "file":
+                    photo_url = f["file"]["url"]
+                elif f.get("type") == "external":
+                    photo_url = f["external"]["url"]
+
+            results.append({
+                "page_id":   page_id,
+                "name":      name or page_id,
+                "has_photo": photo_url is not None,
+                "photo_url": photo_url,
+            })
+        except Exception as exc:
+            print(f"  ⚠ check_performer_photos failed for {page_id}: {exc}")
+            results.append({
+                "page_id":   page_id,
+                "name":      page_id,
+                "has_photo": False,
+                "photo_url": None,
+            })
+    return results
+
+
 def fetch_performer_photos(performer_ids: list[str], limit: int = 16) -> list[Image.Image | None]:
     """Download the 'Main photo' for each Notion performer page ID."""
     photos: list[Image.Image | None] = []

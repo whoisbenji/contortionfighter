@@ -24,7 +24,9 @@ from .tools import (
     webflow_find_performers,
     webflow_create_blog_draft,
     generate_images,
+    set_performer_photo,
 )
+from .compositor import check_performer_photos
 from . import memory as mem
 
 MODEL = "claude-sonnet-4-6"
@@ -382,6 +384,7 @@ _NOOP_EVENT      = lambda event: None
 _NOOP_PAUSE      = lambda: None
 _NOOP_REVIEW     = lambda performers: {"decisions": [{"name": p["name"], "action": "skip"} for p in performers]}
 _NOOP_USER_INPUT = lambda: "no"
+_NOOP_PHOTO_URLS = lambda performers: {}  # proceed without collecting missing photos
 
 
 # ── Phase output extraction ───────────────────────────────────────────────────
@@ -426,6 +429,7 @@ def _loop(
     check_pause,
     get_performer_review,
     get_user_input,
+    get_photo_urls,
     run_id: str,
     verbose: bool,
     tools_override: list[dict] | None = None,
@@ -535,6 +539,28 @@ def _loop(
                 })
                 continue
 
+            # ── Photo check before image generation ──────────────────────
+            if tool_name == "generate_images":
+                performer_ids = tool_input.get("performer_page_ids", [])
+                performers = check_performer_photos(performer_ids)
+                missing_count = sum(1 for p in performers if not p["has_photo"])
+                on_event({
+                    "type":          "photo_check",
+                    "performers":    performers,
+                    "missing_count": missing_count,
+                })
+                photo_urls = get_photo_urls(performers)
+                # Write provided URLs back to Notion
+                for pid, url in (photo_urls or {}).items():
+                    if url and url.strip():
+                        try:
+                            set_performer_photo(pid, url.strip())
+                            on_event({"type": "tool_result", "tool": "set_performer_photo",
+                                      "result": f"Photo saved for {pid}", "ok": True})
+                        except Exception as exc:
+                            on_event({"type": "tool_result", "tool": "set_performer_photo",
+                                      "result": f"Failed to save photo: {exc}", "ok": False})
+
             # ── Pause / interject check ───────────────────────────────────
             interject = check_pause()
             if interject:
@@ -617,7 +643,7 @@ def run(month_label: str, verbose: bool = True) -> str:
     if verbose:
         print(f"\n🤸 Starting performance review agent for {month_label}\n{'─'*60}")
     try:
-        result = _loop(month_label, messages, _NOOP_EVENT, _NOOP_PAUSE, _NOOP_REVIEW, _NOOP_USER_INPUT, run_id, verbose)
+        result = _loop(month_label, messages, _NOOP_EVENT, _NOOP_PAUSE, _NOOP_REVIEW, _NOOP_USER_INPUT, _NOOP_PHOTO_URLS, run_id, verbose)
         mem.complete_run(run_id)
         return result
     except Exception as exc:
@@ -631,6 +657,7 @@ def run_with_callbacks(
     check_pause,
     get_performer_review,
     get_user_input=None,
+    get_photo_urls=None,
     run_id: str | None = None,
     replay_from: int = 1,
     cached_run: dict | None = None,
@@ -673,7 +700,8 @@ def run_with_callbacks(
               "label": {1:"Research",2:"Performer Matching",3:"Image Generation",
                         4:"Writing Article",5:"Publishing to Webflow"}.get(start_phase,"Working")})
 
-    _get_user_input = get_user_input if get_user_input is not None else _NOOP_USER_INPUT
+    _get_user_input  = get_user_input  if get_user_input  is not None else _NOOP_USER_INPUT
+    _get_photo_urls  = get_photo_urls  if get_photo_urls  is not None else _NOOP_PHOTO_URLS
 
     # ask_about_existing_research is only meaningful for a fresh run (not replay)
     active_tools_with_ask = active_tools
@@ -686,7 +714,7 @@ def run_with_callbacks(
 
     try:
         result = _loop(month_label, messages, on_event, check_pause, get_performer_review,
-                       _get_user_input, run_id, verbose=False, tools_override=active_tools_with_ask)
+                       _get_user_input, _get_photo_urls, run_id, verbose=False, tools_override=active_tools_with_ask)
         mem.complete_run(run_id)
         on_event({"type": "history_updated"})
         return result

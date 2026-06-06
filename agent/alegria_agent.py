@@ -459,6 +459,45 @@ def _run_luzia_inline(inp: dict, on_event, get_user_message) -> dict:
         on_event({"type": "alegria_waiting"})
         return get_user_message() or ""
 
+    def sub_get_photo_urls(performers):
+        missing = [p for p in performers if not p.get("has_photo")]
+        if not missing:
+            return {}
+        lines = [
+            f"**Luzia photo check:** {len(performers)} performer(s) attached · "
+            f"**{len(missing)} missing a Main photo.**",
+            "Paste an image URL next to each name, or reply **skip** to proceed without them:",
+            "",
+        ]
+        for i, p in enumerate(missing, 1):
+            lines.append(f"{i}. **{p.get('name', '?')}**")
+        on_event({"type": "alegria_message", "text": "\n".join(lines)})
+        on_event({"type": "alegria_waiting"})
+
+        user_resp = get_user_message() or ""
+        if user_resp.strip().lower() in ("skip", "none", ""):
+            return {}
+
+        # Accept "N: url" lines or one URL per line matched to missing in order
+        urls: dict[str, str] = {}
+        for line in user_resp.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            # "2: https://..." or "2. https://..."
+            m = _re.match(r'^(\d+)[.:]\s*(https?://\S+)', line)
+            if m:
+                idx = int(m.group(1)) - 1
+                if 0 <= idx < len(missing):
+                    urls[missing[idx]["page_id"]] = m.group(2)
+            elif line.startswith("http"):
+                # Bare URL — match to next unassigned missing performer
+                for p in missing:
+                    if p["page_id"] not in urls:
+                        urls[p["page_id"]] = line
+                        break
+        return urls
+
     try:
         luzia_agent.run_with_callbacks(
             month_label=month_label,
@@ -466,6 +505,7 @@ def _run_luzia_inline(inp: dict, on_event, get_user_message) -> dict:
             check_pause=sub_check_pause,
             get_performer_review=sub_get_performer_review,
             get_user_input=sub_get_user_input,
+            get_photo_urls=sub_get_photo_urls,
             run_id=None,
             replay_from=replay_from,
             cached_run=cached_run,
