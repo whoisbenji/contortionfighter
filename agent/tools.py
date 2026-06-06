@@ -273,6 +273,78 @@ def _blocks_to_text(blocks: list[dict], indent: int = 0) -> str:
     return "\n".join(filter(None, lines))
 
 
+def _fetch_database(db_id: str, max_rows: int = 50) -> dict:
+    """Fetch a Notion database — returns its title, schema fields, and up to max_rows rows."""
+    # Database metadata
+    db_resp = requests.get(
+        f"{cfg.NOTION_BASE}/databases/{db_id}",
+        headers=_notion_headers(),
+        timeout=30,
+    )
+    _raise_for(db_resp)
+    db = db_resp.json()
+
+    # Title
+    title_parts = db.get("title", [])
+    title = "".join(t.get("plain_text", "") for t in title_parts)
+
+    # Schema fields
+    fields = list(db.get("properties", {}).keys())
+
+    # Query rows
+    rows_resp = requests.post(
+        f"{cfg.NOTION_BASE}/databases/{db_id}/query",
+        headers=_notion_headers(),
+        json={"page_size": max_rows},
+        timeout=30,
+    )
+    _raise_for(rows_resp)
+    rows_data = rows_resp.json().get("results", [])
+
+    rows = []
+    for page in rows_data:
+        row: dict[str, str] = {"id": page["id"], "url": page.get("url", "")}
+        for key, prop in page.get("properties", {}).items():
+            ptype = prop.get("type", "")
+            if ptype == "title":
+                texts = prop.get("title", [])
+                row[key] = "".join(t.get("plain_text", "") for t in texts)
+            elif ptype == "rich_text":
+                texts = prop.get("rich_text", [])
+                val = "".join(t.get("plain_text", "") for t in texts)
+                if val:
+                    row[key] = val
+            elif ptype in ("select", "status"):
+                sel = prop.get(ptype) or {}
+                if sel.get("name"):
+                    row[key] = sel["name"]
+            elif ptype == "multi_select":
+                vals = [s["name"] for s in prop.get("multi_select", []) if s.get("name")]
+                if vals:
+                    row[key] = ", ".join(vals)
+            elif ptype == "date":
+                d = prop.get("date") or {}
+                if d.get("start"):
+                    row[key] = d["start"]
+            elif ptype == "checkbox":
+                row[key] = "yes" if prop.get("checkbox") else "no"
+            elif ptype == "number":
+                if prop.get("number") is not None:
+                    row[key] = str(prop["number"])
+            elif ptype == "url":
+                if prop.get("url"):
+                    row[key] = prop["url"]
+        rows.append(row)
+
+    return {
+        "type": "database",
+        "title": title,
+        "fields": fields,
+        "row_count": len(rows),
+        "rows": rows,
+    }
+
+
 def notion_fetch_page(page_id_or_url: str, max_blocks: int = 200) -> dict:
     """
     Fetch a Notion page's title, properties and body text.
@@ -301,13 +373,19 @@ def notion_fetch_page(page_id_or_url: str, max_blocks: int = 200) -> dict:
         # Bare 32-char hex ID — format as UUID
         page_id = f"{page_id[:8]}-{page_id[8:12]}-{page_id[12:16]}-{page_id[16:20]}-{page_id[20:]}"
 
-    # Fetch page metadata
+    # Fetch — try as page first, fall back to database if Notion says so
     page_resp = requests.get(
         f"{cfg.NOTION_BASE}/pages/{page_id}",
         headers=_notion_headers(),
         timeout=30,
     )
-    _raise_for(page_resp)
+
+    if not page_resp.ok:
+        err = page_resp.json()
+        if err.get("code") == "validation_error" and "is a database" in err.get("message", ""):
+            return _fetch_database(page_id)
+        _raise_for(page_resp)
+
     page = page_resp.json()
 
     # Extract title from properties
