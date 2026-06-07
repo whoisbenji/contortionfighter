@@ -27,7 +27,7 @@ import queue
 import threading
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.requests import Request
 from fastapi.staticfiles import StaticFiles
@@ -206,6 +206,34 @@ async def get_history():
             s["header_url"] = mem.image_url(r["images"].get("header_path"))
         slim.append(s)
     return JSONResponse(slim)
+
+
+@app.post("/api/upload-performer-photo")
+async def upload_performer_photo(file: UploadFile = File(...)):
+    """Upload an image and push it to Webflow Assets, returning a permanent CDN URL."""
+    import asyncio
+    import tempfile
+    from pathlib import Path as _Path
+    from .compositor import upload_to_webflow
+
+    data = await file.read()
+    suffix = _Path(file.filename or "photo.jpg").suffix or ".jpg"
+    asset_name = _Path(file.filename or "performer-photo.jpg").name
+
+    # Write to a temp file (upload_to_webflow expects a Path)
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(data)
+        tmp_path = _Path(tmp.name)
+
+    try:
+        result = await asyncio.get_event_loop().run_in_executor(
+            None, upload_to_webflow, tmp_path, asset_name
+        )
+        return JSONResponse({"url": result["url"]})
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 @app.post("/api/feedback")

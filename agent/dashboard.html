@@ -291,6 +291,9 @@
   .photo-missing-name { font-size: 12px; font-weight: 600; min-width: 120px; }
   .photo-missing-input { flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 12px; color: var(--text); font-family: var(--font-mono); }
   .photo-missing-input:focus { outline: none; border-color: var(--purple); }
+  .photo-upload-btn { cursor: pointer; font-size: 16px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg3); line-height:1; flex-shrink:0; transition: border-color .15s; }
+  .photo-upload-btn:hover { border-color: var(--purple); }
+  .photo-upload-status { font-size: 10px; font-family: var(--font-mono); color: var(--muted); min-width: 60px; }
 
   /* ── Performer review ── */
   .performer-review-panel { border-top: 1px solid var(--border); background: var(--bg2); padding: 16px 24px; display: flex; flex-direction: column; gap: 12px; max-height: 380px; overflow-y: auto; }
@@ -1454,12 +1457,17 @@ function showPhotoCheckPanel(performers, missingCount) {
     </div>` : ''}
 
     ${withMissing.length ? `
-    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Missing photos — provide image URLs</div>
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Missing photos — upload or paste a URL</div>
     <div class="photo-missing-row" id="photo-missing-inputs">
       ${withMissing.map(p => `
         <div class="photo-missing-item">
           <span class="photo-missing-name">${esc(p.name)}</span>
-          <input class="photo-missing-input" type="url" placeholder="https://…" data-page-id="${esc(p.page_id)}">
+          <input class="photo-missing-input" type="url" placeholder="https://… or upload →" data-page-id="${esc(p.page_id)}">
+          <label class="photo-upload-btn" title="Upload image file">
+            📎
+            <input type="file" accept="image/*" style="display:none" data-page-id="${esc(p.page_id)}">
+          </label>
+          <span class="photo-upload-status" data-page-id="${esc(p.page_id)}"></span>
         </div>`).join('')}
     </div>` : ''}
 
@@ -1468,6 +1476,37 @@ function showPhotoCheckPanel(performers, missingCount) {
       ${missingCount ? `<button class="btn btn-muted" id="photo-skip-btn">Skip missing & continue</button>` : ''}
     </div>
   `;
+
+  // Wire up file upload inputs
+  panel.querySelectorAll('input[type="file"]').forEach(fileInput => {
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      const pageId = fileInput.dataset.pageId;
+      const urlInput = panel.querySelector(`.photo-missing-input[data-page-id="${pageId}"]`);
+      const status   = panel.querySelector(`.photo-upload-status[data-page-id="${pageId}"]`);
+      status.textContent = 'Uploading…';
+      status.style.color = 'var(--muted)';
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const resp = await fetch('/api/upload-performer-photo', { method: 'POST', body: form });
+        const json = await resp.json();
+        if (json.url) {
+          urlInput.value = json.url;
+          status.textContent = '✓ Uploaded';
+          status.style.color = 'var(--green)';
+        } else {
+          status.textContent = '✕ ' + (json.error || 'Failed');
+          status.style.color = 'var(--red)';
+        }
+      } catch (err) {
+        status.textContent = '✕ Error';
+        status.style.color = 'var(--red)';
+      }
+      fileInput.value = '';
+    });
+  });
 
   function submitUrls(urls) {
     ws.send(JSON.stringify({ type: 'photo_urls', urls }));
