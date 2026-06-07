@@ -27,7 +27,7 @@ import queue
 import threading
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.requests import Request
 from fastapi.staticfiles import StaticFiles
@@ -209,25 +209,30 @@ async def get_history():
 
 
 @app.post("/api/upload-performer-photo")
-async def upload_performer_photo(file: UploadFile = File(...)):
-    """Upload an image and push it to Webflow Assets, returning a permanent CDN URL."""
-    import asyncio
+async def upload_performer_photo(request: Request):
+    """Accept {filename, data_b64} JSON, upload to Webflow Assets, return CDN URL."""
+    import base64
     import tempfile
     from pathlib import Path as _Path
     from .compositor import upload_to_webflow
 
-    data = await file.read()
-    suffix = _Path(file.filename or "photo.jpg").suffix or ".jpg"
-    asset_name = _Path(file.filename or "performer-photo.jpg").name
+    body = await request.json()
+    filename = body.get("filename", "performer-photo.jpg")
+    data_b64 = body.get("data_b64", "")
 
-    # Write to a temp file (upload_to_webflow expects a Path)
+    try:
+        data = base64.b64decode(data_b64)
+    except Exception:
+        return JSONResponse({"error": "invalid base64"}, status_code=400)
+
+    suffix = _Path(filename).suffix or ".jpg"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(data)
         tmp_path = _Path(tmp.name)
 
     try:
         result = await asyncio.get_event_loop().run_in_executor(
-            None, upload_to_webflow, tmp_path, asset_name
+            None, upload_to_webflow, tmp_path, filename
         )
         return JSONResponse({"url": result["url"]})
     except Exception as exc:
