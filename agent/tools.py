@@ -109,12 +109,25 @@ def web_search(query: str, max_results: int = 8) -> dict:
 
 def notion_create_research_page(month_label: str, content_markdown: str) -> dict:
     """Create a research-notes page in the Monthly research Notion database."""
+    db_id = cfg.get("NOTION_MONTHLY_RESEARCH_DS")
+
+    db_resp = requests.get(
+        f"{cfg.NOTION_BASE}/databases/{db_id}",
+        headers=_notion_headers(),
+        timeout=30,
+    )
+    _raise_for(db_resp)
+    db_props = db_resp.json().get("properties", {})
+    title_prop_name = next(
+        (name for name, p in db_props.items() if p.get("type") == "title"),
+        "Name",
+    )
+
     blocks = _markdown_to_notion_blocks(content_markdown)
-    # Notion allows at most 100 blocks on page creation; append the rest after
     payload = {
-        "parent": {"database_id": cfg.get("NOTION_MONTHLY_RESEARCH_DS")},
+        "parent": {"database_id": db_id},
         "properties": {
-            "Research month": {"title": [{"text": {"content": month_label}}]},
+            title_prop_name: {"title": [{"text": {"content": month_label}}]},
         },
         "children": blocks[:100],
     }
@@ -136,18 +149,52 @@ def notion_create_article_page(
     Create the monthly article in the Monthly performance posts Notion database,
     linking the relevant performer and show pages.
     """
+    db_id = cfg.get("NOTION_MONTHLY_POSTS_DS")
+
+    # Fetch the database schema to discover actual property names
+    db_resp = requests.get(
+        f"{cfg.NOTION_BASE}/databases/{db_id}",
+        headers=_notion_headers(),
+        timeout=30,
+    )
+    _raise_for(db_resp)
+    db_props = db_resp.json().get("properties", {})
+
+    # Find the title property (there's always exactly one)
+    title_prop_name = next(
+        (name for name, p in db_props.items() if p.get("type") == "title"),
+        "Name",
+    )
+
+    # Find relation properties — match by checking which database they point to
+    performer_prop_name: str | None = None
+    shows_prop_name: str | None = None
+    icpdb_id_clean = cfg.get("NOTION_ICPDB_DS").replace("-", "")
+    shows_id_clean = cfg.get("NOTION_SHOWS_DS").replace("-", "")
+    for name, p in db_props.items():
+        if p.get("type") != "relation":
+            continue
+        related_db = p.get("relation", {}).get("database_id", "").replace("-", "")
+        if related_db == icpdb_id_clean:
+            performer_prop_name = name
+        elif related_db == shows_id_clean:
+            shows_prop_name = name
+
     properties: dict = {
-        "Name": {"title": [{"text": {"content": month_label}}]},
-        "Performers mentioned": {
-            "relation": [{"id": pid} for pid in performer_page_ids]
-        },
+        title_prop_name: {"title": [{"text": {"content": month_label}}]},
     }
-    if show_page_ids:
-        properties["Shows"] = {"relation": [{"id": sid} for sid in show_page_ids]}
+    if performer_prop_name and performer_page_ids:
+        properties[performer_prop_name] = {
+            "relation": [{"id": pid} for pid in performer_page_ids]
+        }
+    if shows_prop_name and show_page_ids:
+        properties[shows_prop_name] = {
+            "relation": [{"id": sid} for sid in show_page_ids]
+        }
 
     blocks = _markdown_to_notion_blocks(article_body)
     payload = {
-        "parent": {"database_id": cfg.get("NOTION_MONTHLY_POSTS_DS")},
+        "parent": {"database_id": db_id},
         "properties": properties,
         "children": blocks[:100],
     }
@@ -156,7 +203,13 @@ def notion_create_article_page(
     page = resp.json()
     if len(blocks) > 100:
         _notion_append_blocks(page["id"], blocks[100:])
-    return {"page_id": page["id"], "url": page["url"]}
+    return {
+        "page_id": page["id"],
+        "url": page["url"],
+        "title_property": title_prop_name,
+        "performer_property": performer_prop_name,
+        "shows_property": shows_prop_name,
+    }
 
 
 def notion_search_performer(name: str) -> dict:
