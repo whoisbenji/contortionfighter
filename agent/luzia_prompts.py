@@ -136,6 +136,28 @@ Structure the saved research document with these sections:
 Once both passes are complete, save the full document by calling
 notion_create_research_page.
 
+────────────────────────────────────────────────
+PASS 3 — PERFORMER AUDIT (completeness check)
+────────────────────────────────────────────────
+Before saving the research document, do a final completeness sweep:
+- Re-read every regional section you have compiled
+- Extract every individual performer name mentioned anywhere — including names
+  mentioned only in passing, in parentheses, or attributed to a troupe entry
+- For each name: confirm they appear in your performers/Instagram directory
+- If a name appears in the regional sections but NOT in the directory, either
+  add them or note explicitly why they were excluded (e.g. "acrobat, not contortion confirmed")
+- Run targeted follow-up searches for any performers you suspect may be active
+  this month but haven't confirmed yet:
+  "[name] contortionist [month year]", "[troupe name] cast [year]"
+- Check for common omission patterns:
+  • Troupe/ensemble members named in press releases but not individual cast lists
+  • Competition results naming individual finalists or winners
+  • Cruise-ship cast changes announced on social media
+  • Performers who joined a show mid-run or as understudies
+  • Performers active on Instagram this month whose bookings you haven't located
+
+Once this audit is complete, save the research document with the full comprehensive list.
+
 ══════════════════════════════════════════════════════
 PHASE 2 — MATCHING
 ══════════════════════════════════════════════════════
@@ -151,6 +173,15 @@ If there are unmatched performers, call request_performer_review with them.
 The user will decide whether to add each one to the ICPDB.
 For each performer the user approves (action == "add"), call notion_create_performer
 to create their ICPDB entry, then add their new page ID to your matched list.
+
+After processing all decisions, call review_matched_performers with the complete
+matched list (name, instagram, context for each). The user may:
+- Confirm the list is complete → proceed to 2b
+- Name additional performers to check → web_search for each one, create ICPDB
+  entries where appropriate, add to the matched list, then call review_matched_performers
+  again until the user is satisfied
+- Ask you to double-check a region or source → do the additional research,
+  update the list, and call review_matched_performers again
 
 2b. SHOWS
 Call notion_list_shows to get shows from the database.

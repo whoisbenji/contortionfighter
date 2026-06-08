@@ -158,6 +158,35 @@ TOOLS: list[dict] = [
         },
     },
     {
+        "name": "review_matched_performers",
+        "description": (
+            "Show the user the full list of performers matched for this month and ask "
+            "whether any are missing. The user can approve the list, name additional "
+            "performers to research, or ask you to double-check a region. "
+            "Returns the user's response text. Call this after processing performer "
+            "review decisions and before proceeding to Phase 2b."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "matched_performers": {
+                    "type": "array",
+                    "description": "All performers matched so far.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name":      {"type": "string"},
+                            "instagram": {"type": "string", "description": "Handle without @"},
+                            "context":   {"type": "string", "description": "Show / venue / region"},
+                        },
+                        "required": ["name"],
+                    },
+                },
+            },
+            "required": ["matched_performers"],
+        },
+    },
+    {
         "name": "notion_list_shows",
         "description": "Return shows from the Shows database. Use in Phase 2 to match shows mentioned in research.",
         "input_schema": {
@@ -371,6 +400,7 @@ TOOL_PHASE_MAP = {
     "notion_list_performers_in_icpdb": (2, "Performer Matching"),
     "notion_search_performer":         (2, "Performer Matching"),
     "request_performer_review":        (2, "Performer Matching"),
+    "review_matched_performers":       (2, "Performer Matching"),
     "notion_create_performer":         (2, "Performer Matching"),
     "notion_list_shows":               (2, "Performer Matching"),
     "notion_search_show":              (2, "Performer Matching"),
@@ -517,6 +547,25 @@ def _loop(
                     "type":   "tool_result",
                     "tool":   tool_name,
                     "result": f"User answered: {user_answer[:200]}",
+                    "ok":     True,
+                })
+                continue
+
+            # ── Matched performer list review: block for user input ──────
+            if tool_name == "review_matched_performers":
+                performers = tool_input.get("matched_performers", [])
+                on_event({"type": "performer_list_review", "performers": performers})
+                user_response = get_user_input()
+                result = {"user_response": user_response or "ok"}
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": block.id,
+                    "content":     json.dumps(result),
+                })
+                on_event({
+                    "type":   "tool_result",
+                    "tool":   tool_name,
+                    "result": f"User responded: {(user_response or 'ok')[:200]}",
                     "ok":     True,
                 })
                 continue
@@ -685,6 +734,7 @@ def run_with_callbacks(
         "notion_list_performers_in_icpdb": 2,
         "notion_search_performer": 2,
         "request_performer_review": 2,
+        "review_matched_performers": 2,
         "notion_create_performer": 2,
         "notion_list_shows": 2,
         "notion_search_show": 2,

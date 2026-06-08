@@ -278,6 +278,18 @@
   .dots::after { content: '...'; animation: dots 1.2s steps(4, end) infinite; }
   @keyframes dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} 100%{content:''} }
 
+  /* ── Performer list review panel ── */
+  .plr-header { font-size: 13px; font-weight: 700; color: var(--purple); }
+  .plr-sub { font-size: 11px; color: var(--muted); font-family: var(--font-mono); margin-top: -4px; }
+  .plr-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
+  .plr-chip { background: var(--bg3); border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; font-size: 11px; display: flex; align-items: center; gap: 6px; }
+  .plr-chip a { color: var(--purple); text-decoration: none; font-size: 10px; }
+  .plr-chip a:hover { text-decoration: underline; }
+  .plr-input-row { display: flex; gap: 8px; align-items: flex-start; margin-top: 4px; }
+  .plr-input { flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 12px; color: var(--text); font-family: var(--font-mono); resize: vertical; min-height: 48px; }
+  .plr-input:focus { outline: none; border-color: var(--purple); }
+  .plr-hint { font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+
   /* ── Photo check panel ── */
   .photo-check-header { font-size: 13px; font-weight: 700; color: var(--purple); }
   .photo-check-sub { font-size: 11px; color: var(--muted); font-family: var(--font-mono); margin-top: -4px; }
@@ -619,6 +631,7 @@
         <p>Enter a month and click <strong>Run Agent</strong> to generate your monthly performance review.<br><br>Or expand <strong>Past Runs</strong> to replay or refine a previous run.</p>
       </div>
     </div>
+    <div id="performer-list-review-panel" style="display:none" class="performer-review-panel"></div>
     <div id="photo-check-panel" style="display:none" class="performer-review-panel"></div>
     <div id="performer-review" style="display:none" class="performer-review-panel">
       <div class="pr-title">👤 Performers not in ICPDB</div>
@@ -1377,6 +1390,11 @@ function handleMessage(data) {
       setStatus('paused', 'Awaiting input');
       showResearchQuestion(data.past_runs || []);
       break;
+    case 'performer_list_review':
+      setStatus('paused', 'Awaiting performer review');
+      addFeedEntry('paused', '👥', 'Performer list ready', `${data.performers.length} performer(s) matched — review and confirm or suggest additions.`);
+      showPerformerListReview(data.performers);
+      break;
     case 'photo_check':
       setStatus('paused', 'Awaiting photo review');
       addFeedEntry('paused', '🖼', 'Photo check', `${data.performers.length} performer(s) — ${data.missing_count} missing photo${data.missing_count !== 1 ? 's' : ''}.`);
@@ -1437,6 +1455,48 @@ function handleMessage(data) {
 }
 
 // ── Photo check panel ─────────────────────────────────────────────────────────
+function showPerformerListReview(performers) {
+  const panel = document.getElementById('performer-list-review-panel');
+  panel.style.display = 'flex';
+
+  const chips = performers.map(p => {
+    const ig = p.instagram ? `<a href="https://instagram.com/${esc(p.instagram)}" target="_blank" rel="noopener">@${esc(p.instagram)} ↗</a>` : '';
+    const ctx = p.context ? `<span style="color:var(--muted);font-size:10px">${esc(p.context)}</span>` : '';
+    return `<span class="plr-chip">${esc(p.name)}${ig ? ' ' + ig : ''}${ctx ? ' · ' + ctx : ''}</span>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="plr-header">👥 ${performers.length} performer${performers.length !== 1 ? 's' : ''} matched for this month</div>
+    <div class="plr-sub">Review the list below. Confirm it's complete or suggest anyone who might be missing.</div>
+    <div class="plr-grid">${chips}</div>
+    <div class="plr-hint">Type a reply — e.g. "looks good", "check Central Asia again", or name performers you think are missing.</div>
+    <div class="plr-input-row">
+      <textarea class="plr-input" id="plr-input" placeholder="Looks good — continue…"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="pr-btn pr-btn-add" id="plr-send-btn">Send ↵</button>
+      <button class="pr-btn pr-btn-skip" id="plr-ok-btn">Looks good — continue</button>
+    </div>`;
+
+  function sendResponse(msg) {
+    panel.style.display = 'none';
+    ws.send(JSON.stringify({ type: 'user_input', message: msg }));
+  }
+
+  document.getElementById('plr-send-btn').onclick = () => {
+    const val = document.getElementById('plr-input').value.trim();
+    if (val) sendResponse(val);
+  };
+  document.getElementById('plr-ok-btn').onclick = () => sendResponse('Looks good — continue.');
+  document.getElementById('plr-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      const val = document.getElementById('plr-input').value.trim();
+      if (val) sendResponse(val);
+    }
+  });
+}
+
 function showPhotoCheckPanel(performers, missingCount) {
   const panel = document.getElementById('photo-check-panel');
   const withPhotos  = performers.filter(p => p.has_photo);
