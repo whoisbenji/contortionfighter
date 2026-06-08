@@ -1,22 +1,19 @@
 """
 Image compositor for the monthly performance review.
 
-Reads performer photos from Notion ICPDB, composites them into the Figma
-template layout (scattered rotated rounded-rect cards on a dark background),
-and outputs two formats:
-  • Instagram Story  — 1080 × 1920 px  (9:16)  — frame 1:21, has title text
-  • Article header   — 1500 × 844 px   (16:9)  — frame 1:2,  no text
-
-Template geometry derived from Figma file LzSysRugmbHEVMdCAVDe4k.
+Reads performer photos from Notion ICPDB, composites them into a dynamic
+scattered-card layout on a dark background, and outputs two formats:
+  • Instagram Story  — 1080 × 1920 px  (9:16)  — has title text
+  • Article header   — 1500 × 844 px   (16:9)  — no text
 """
 
 from __future__ import annotations
 
 import io
+import math
 import os
 import re
 from pathlib import Path
-from typing import NamedTuple
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -24,68 +21,14 @@ from PIL import Image, ImageDraw, ImageFont
 from .config import NOTION_BASE, NOTION_ICPDB_DS
 
 
-# ── Template geometry (native px, from Figma) ────────────────────────────────
+# ── Constants ─────────────────────────────────────────────────────────────────
 
-class Slot(NamedTuple):
-    cx: float    # centre-x in native coords
-    cy: float    # centre-y in native coords
-    size: float  # card side length (square, before rotation)
-    radius: float
-
-
-CARD_ROTATION = 30  # degrees, same for all slots
+CARD_ROTATION = 15   # degrees; alternated ±per card
 BG_COLOUR     = "#090909"
 TEXT_COLOUR   = (255, 255, 255)
 
-
-# Frame 1:21 — Social / Story template, native 496×1073, title at (26, 816)
-STORY_NATIVE_W = 496
-STORY_NATIVE_H = 1073
-STORY_TITLE_LEFT  = 26
-STORY_TITLE_TOP   = 816
-STORY_FONT_SIZE_NATIVE = 44
-
-STORY_SLOTS: list[Slot] = [
-    Slot(419.85,  65.65, 168.50, 24),
-    Slot( 98.23,  62.83, 166.86, 24),
-    Slot(206.37, 442.47, 175.75, 24),
-    Slot(302.17, 598.87, 175.75, 24),
-    Slot(257.83,  66.53, 166.86, 24),
-    Slot(270.23, 314.93, 166.86, 24),
-    Slot(105.93, 314.93, 166.86, 24),
-    Slot(190.57, 707.87, 157.75, 24),
-    Slot(496.03, 186.43, 166.86, 24),
-    Slot(182.53, 186.43, 166.86, 24),
-    Slot(349.77, 194.07, 152.15, 24),
-    Slot(439.61, 319.11, 176.22, 24),
-    Slot(361.61, 783.11, 176.22, 24),
-    Slot(462.61, 657.11, 176.22, 24),
-    Slot(363.61, 442.11, 176.22, 24),
-    Slot(505.61, 495.11, 176.22, 24),
-]
-
-# Frame 1:2 — Header template, native 1956×911, no text
-HEADER_NATIVE_W = 1956
-HEADER_NATIVE_H = 911
-
-HEADER_SLOTS: list[Slot] = [
-    Slot(1083.75, 108.45, 393.70, 24),
-    Slot( 332.34, 101.94, 389.88, 24),
-    Slot(1514.22,  16.32, 410.63, 24),
-    Slot(1869.92, 112.32, 410.63, 24),
-    Slot( 705.24, 110.44, 389.88, 24),
-    Slot( 757.44, 690.84, 389.88, 24),
-    Slot( 373.64, 690.84, 389.88, 24),
-    Slot(1332.69, 312.00, 368.57, 24),
-    Slot( 911.14, 390.54, 389.88, 24),
-    Slot( 178.64, 390.54, 389.88, 24),
-    Slot( 514.75, 399.05, 355.49, 24),
-    Slot(1192.17, 596.47, 411.73, 24),
-    Slot(1698.47, 427.17, 411.73, 24),
-    Slot(1951.97, 727.57, 411.73, 24),
-    Slot(1493.27, 782.87, 411.73, 24),
-    Slot(1034.57, 885.87, 411.73, 24),
-]
+# Bounding-box multiplier for a square rotated CARD_ROTATION degrees
+_BB_MULT = math.cos(math.radians(CARD_ROTATION)) + math.sin(math.radians(CARD_ROTATION))
 
 
 # ── Font loading ──────────────────────────────────────────────────────────────
@@ -137,19 +80,82 @@ def _rounded_mask(size: int, radius: int) -> Image.Image:
     return mask
 
 
+# ── Layout computation ────────────────────────────────────────────────────────
+
+def _compute_layout(
+    n: int,
+    canvas_w: int,
+    photo_area_h: int,
+    max_card: int = 420,
+) -> list[tuple[int, int, int]]:
+    """
+    Return (cx, cy, card_size_px) for n photos arranged without overlap.
+    Cards are guaranteed non-overlapping accounting for rotation bounding boxes.
+    """
+    if n == 0:
+        return []
+
+    gap = 28       # minimum gap between bounding boxes in px
+    nudge = 0.025  # max nudge as fraction of cell (keeps visual variety within safe bounds)
+
+    best: tuple | None = None
+    for cols in range(1, min(n + 1, 6)):
+        rows = math.ceil(n / cols)
+        # shrink usable area by 2*nudge on each axis to keep nudged cards from overlapping
+        usable_w = canvas_w    * (1 - 2 * nudge)
+        usable_h = photo_area_h * (1 - 2 * nudge)
+        card_w = (usable_w  - gap * (cols + 1)) / cols / _BB_MULT
+        card_h = (usable_h  - gap * (rows + 1)) / rows / _BB_MULT
+        card = min(card_w, card_h, max_card)
+        if card < 60:
+            continue
+        score = card * 10 - rows * 4 - abs(cols - rows) * 2
+        if best is None or score > best[0]:
+            best = (score, cols, rows, int(card))
+
+    if best is None:
+        return []
+
+    _, cols, rows, card = best
+    cell_w = canvas_w / cols
+    cell_h = photo_area_h / rows
+
+    # Deterministic nudges to break up the grid feel (bounded by nudge fraction)
+    nudges = [
+        ( 0.00,  0.00), ( 0.02, -0.02), (-0.02,  0.02),
+        ( 0.02,  0.02), (-0.02, -0.02), ( 0.01,  0.02),
+        (-0.02, -0.01), ( 0.02, -0.01),
+    ]
+
+    positions: list[tuple[int, int, int]] = []
+    idx = 0
+    for row in range(rows):
+        n_in_row = min(cols, n - row * cols)
+        row_w = n_in_row * cell_w
+        x_start = (canvas_w - row_w) / 2 + cell_w / 2
+        for col in range(n_in_row):
+            cx = x_start + col * cell_w
+            cy = cell_h * (row + 0.5)
+            dx, dy = nudges[idx % len(nudges)]
+            cx += dx * cell_w
+            cy += dy * cell_h
+            positions.append((int(cx), int(cy), card))
+            idx += 1
+
+    return positions
+
+
 # ── Core compositing ──────────────────────────────────────────────────────────
 
 def _paste_card(
     canvas: Image.Image,
     photo: Image.Image,
-    slot: Slot,
-    scale: float,
-    x_offset: int = 0,
-    y_offset: int = 0,
+    cx: int,
+    cy: int,
+    card_px: int,
+    radius_px: int,
+    rotation: float,
 ) -> None:
-    card_px   = max(4, int(slot.size   * scale))
-    radius_px = max(2, int(slot.radius * scale))
-
     w, h = photo.size
     min_side = min(w, h)
     left = (w - min_side) // 2
@@ -160,50 +166,41 @@ def _paste_card(
     mask = _rounded_mask(card_px, radius_px)
     photo.putalpha(mask)
 
-    rotated = photo.rotate(-CARD_ROTATION, expand=True, resample=Image.BICUBIC)
-
-    cx = int(slot.cx * scale) + x_offset
-    cy = int(slot.cy * scale) + y_offset
+    rotated = photo.rotate(-rotation, expand=True, resample=Image.BICUBIC)
 
     paste_x = cx - rotated.width  // 2
     paste_y = cy - rotated.height // 2
-
     canvas.paste(rotated, (paste_x, paste_y), rotated)
 
 
 def _build_canvas(
     photos: list[Image.Image | None],
-    slots: list[Slot],
     out_w: int,
     out_h: int,
-    scale: float,
-    x_offset: int,
-    y_offset: int,
+    photo_area_h: int,
     month_label: str | None = None,
-    title_left_native: float = 0,
-    title_top_native: float = 0,
-    font_size_native: int = 44,
+    title_x: int = 80,
+    title_y: int | None = None,
+    font_size: int = 78,
 ) -> Image.Image:
     canvas = Image.new("RGBA", (out_w, out_h), BG_COLOUR)
 
-    for i, slot in enumerate(slots):
-        if i >= len(photos):
-            break
-        photo = photos[i]
-        if photo is None:
-            continue
-        try:
-            _paste_card(canvas, photo, slot, scale, x_offset, y_offset)
-        except Exception as exc:
-            print(f"  ⚠ Skipped slot {i}: {exc}")
+    valid = [p for p in photos if p is not None]
+    if valid:
+        positions = _compute_layout(len(valid), out_w, photo_area_h)
+        for i, (photo, (cx, cy, card_px)) in enumerate(zip(valid, positions)):
+            rotation = CARD_ROTATION if i % 2 == 0 else -CARD_ROTATION
+            radius_px = max(4, int(card_px * 0.10))
+            try:
+                _paste_card(canvas, photo, cx, cy, card_px, radius_px, rotation)
+            except Exception as exc:
+                print(f"  ⚠ Skipped card {i}: {exc}")
 
     if month_label is not None:
         draw = ImageDraw.Draw(canvas)
-        font_size = max(12, int(font_size_native * scale))
         font = _load_font(font_size)
-        x = int(title_left_native * scale) + x_offset
-        y = int(title_top_native  * scale) + y_offset
-        draw.text((x, y), f"{month_label}\nperformances", font=font, fill=TEXT_COLOUR)
+        ty = title_y if title_y is not None else photo_area_h + 40
+        draw.text((title_x, ty), f"{month_label}\nperformances", font=font, fill=TEXT_COLOUR)
 
     return canvas.convert("RGB")
 
@@ -215,23 +212,20 @@ def render_story(
     photos: list[Image.Image | None],
     output_path: str | Path,
 ) -> Path:
-    """Render a 1080 × 1920 Instagram Story PNG (frame 1:21, with title text)."""
+    """Render a 1080 × 1920 Instagram Story PNG with title text."""
     out_w, out_h = 1080, 1920
-    scale    = out_h / STORY_NATIVE_H                      # ≈ 1.789
-    x_offset = (out_w - int(STORY_NATIVE_W * scale)) // 2  # centres horizontally
+    # Reserve bottom ~460px for the title block
+    photo_area_h = 1460
 
     canvas = _build_canvas(
         photos=photos,
-        slots=STORY_SLOTS,
         out_w=out_w,
         out_h=out_h,
-        scale=scale,
-        x_offset=x_offset,
-        y_offset=0,
+        photo_area_h=photo_area_h,
         month_label=month_label,
-        title_left_native=STORY_TITLE_LEFT,
-        title_top_native=STORY_TITLE_TOP,
-        font_size_native=STORY_FONT_SIZE_NATIVE,
+        title_x=80,
+        title_y=1500,
+        font_size=78,
     )
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -244,20 +238,15 @@ def render_header(
     photos: list[Image.Image | None],
     output_path: str | Path,
 ) -> Path:
-    """Render a 1500 × 844 article header PNG (frame 1:2, no text)."""
+    """Render a 1500 × 844 article header PNG (no text)."""
     out_w, out_h = 1500, 844
-    scale    = out_w / HEADER_NATIVE_W                      # ≈ 0.767, width-constrained
-    y_offset = (out_h - int(HEADER_NATIVE_H * scale)) // 2  # centres vertically
 
     canvas = _build_canvas(
         photos=photos,
-        slots=HEADER_SLOTS,
         out_w=out_w,
         out_h=out_h,
-        scale=scale,
-        x_offset=0,
-        y_offset=y_offset,
-        month_label=None,  # no title on header
+        photo_area_h=out_h,
+        month_label=None,
     )
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
