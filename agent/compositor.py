@@ -309,11 +309,15 @@ def check_performer_photos(performer_ids: list[str]) -> list[dict]:
                 elif f.get("type") == "external":
                     photo_url = f["external"]["url"]
 
+            ig_texts = props.get("Instagram", {}).get("rich_text", [])
+            instagram = ig_texts[0].get("plain_text", "").lstrip("@") if ig_texts else ""
+
             results.append({
                 "page_id":   page_id,
                 "name":      name or page_id,
                 "has_photo": photo_url is not None,
                 "photo_url": photo_url,
+                "instagram": instagram,
             })
         except Exception as exc:
             print(f"  ⚠ check_performer_photos failed for {page_id}: {exc}")

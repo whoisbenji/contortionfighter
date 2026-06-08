@@ -1461,7 +1461,7 @@ function showPhotoCheckPanel(performers, missingCount) {
     <div class="photo-missing-row" id="photo-missing-inputs">
       ${withMissing.map(p => `
         <div class="photo-missing-item">
-          <span class="photo-missing-name">${esc(p.name)}</span>
+          <span class="photo-missing-name">${esc(p.name)}${p.instagram ? ` <a href="https://instagram.com/${esc(p.instagram)}" target="_blank" rel="noopener" title="Open Instagram" style="color:var(--purple);font-size:10px;text-decoration:none;font-weight:400">@${esc(p.instagram)} ↗</a>` : ''}</span>
           <input class="photo-missing-input" type="url" placeholder="https://… or upload →" data-page-id="${esc(p.page_id)}">
           <label class="photo-upload-btn" title="Upload image file">
             📎
