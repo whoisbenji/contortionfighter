@@ -19,6 +19,7 @@ from .tools import (
     notion_search_performer,
     notion_list_performers_in_icpdb,
     notion_create_performer,
+    load_outreach_replies,
     notion_list_shows,
     notion_search_show,
     webflow_find_performers,
@@ -35,6 +36,26 @@ MAX_TOKENS = 8192
 # ── Tool schema definitions passed to the API ────────────────────────────────
 
 TOOLS: list[dict] = [
+    {
+        "name": "load_outreach_replies",
+        "description": (
+            "Check whether any performers have recently reported upcoming shows via "
+            "direct outreach replies logged by Varekai. Returns performer names, Instagram "
+            "handles, and their upcoming show info. Treat results as ✓ Confirmed. "
+            "Call this early in Phase 1 before web searches."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "months_back": {
+                    "type": "integer",
+                    "default": 4,
+                    "description": "How many months back to look for logged replies.",
+                },
+            },
+            "required": [],
+        },
+    },
     {
         "name": "ask_about_existing_research",
         "description": (
@@ -316,6 +337,7 @@ def load_existing_research(run_id: str) -> dict:
 
 
 TOOL_FUNCTIONS = {
+    "load_outreach_replies":           load_outreach_replies,
     "load_existing_research":         load_existing_research,
     "web_search": web_search,
     "notion_create_research_page": notion_create_research_page,
@@ -393,6 +415,7 @@ def _stream_response(client, on_event, **kwargs):
 # ── Phase detection ───────────────────────────────────────────────────────────
 
 TOOL_PHASE_MAP = {
+    "load_outreach_replies":           (1, "Research"),
     "ask_about_existing_research":     (1, "Research"),
     "load_existing_research":          (1, "Research"),
     "web_search":                      (1, "Research"),
@@ -727,6 +750,7 @@ def run_with_callbacks(
     # When replaying, restrict available tools to only phases >= replay_from
     # so the model can't accidentally re-run earlier phases
     phase_tool_min = {
+        "load_outreach_replies":        1,
         "ask_about_existing_research": 1,
         "load_existing_research":      1,
         "web_search": 1,

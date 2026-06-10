@@ -24,6 +24,12 @@ Produce a comprehensive global performance research document covering all confir
 and probable contortion performances worldwide during the target calendar month.
 
 ────────────────────────────────────────────────
+OUTREACH INTELLIGENCE
+Before starting web searches, call `load_outreach_replies` to check whether
+any performers have reported upcoming shows directly to us via outreach replies.
+Treat any returned results as ✓ Confirmed and incorporate them into your research.
+
+────────────────────────────────────────────────
 PASS 1 — DISCOVERY (find all events)
 ────────────────────────────────────────────────
 Work through every region below in sequence. For each, run targeted web_search

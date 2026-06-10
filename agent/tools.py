@@ -741,6 +741,91 @@ def set_performer_photo(page_id: str, image_url: str) -> dict:
     return {"ok": True, "page_id": page_id}
 
 
+def load_outreach_replies(months_back: int = 4) -> dict:
+    """
+    Return performers who have logged upcoming show info from outreach replies
+    within the past months_back months. Used by Luzia as confirmed intelligence.
+    """
+    from datetime import datetime, timedelta
+    cutoff = (datetime.utcnow() - timedelta(days=months_back * 31)).strftime("%Y-%m-%d")
+
+    db_id = cfg.get("NOTION_ICPDB_DS")
+    performers = []
+    cursor = None
+
+    while True:
+        payload: dict = {
+            "page_size": 100,
+            "filter": {
+                "and": [
+                    {
+                        "property": "Upcoming Shows",
+                        "rich_text": {"is_not_empty": True},
+                    },
+                    {
+                        "property": "Last Outreach Date",
+                        "date": {"on_or_after": cutoff},
+                    },
+                ]
+            },
+        }
+        if cursor:
+            payload["start_cursor"] = cursor
+
+        try:
+            resp = requests.post(
+                f"{cfg.NOTION_BASE}/databases/{db_id}/query",
+                headers=_notion_headers(),
+                json=payload,
+                timeout=30,
+            )
+            resp.raise_for_status()
+        except Exception:
+            break
+
+        data = resp.json()
+
+        for page in data.get("results", []):
+            props = page.get("properties", {})
+            name = ""
+            for prop in props.values():
+                if prop.get("type") == "title":
+                    texts = prop.get("title", [])
+                    name = texts[0].get("plain_text", "") if texts else ""
+                    break
+
+            ig_texts = props.get("Instagram", {}).get("rich_text", [])
+            instagram = ig_texts[0].get("plain_text", "").lstrip("@") if ig_texts else ""
+
+            shows_texts = props.get("Upcoming Shows", {}).get("rich_text", [])
+            upcoming_shows = shows_texts[0].get("plain_text", "") if shows_texts else ""
+
+            notes_texts = props.get("Outreach Notes", {}).get("rich_text", [])
+            notes = notes_texts[0].get("plain_text", "") if notes_texts else ""
+
+            if upcoming_shows:
+                performers.append({
+                    "id": page["id"],
+                    "name": name,
+                    "instagram": instagram,
+                    "upcoming_shows": upcoming_shows,
+                    "outreach_notes": notes,
+                })
+
+        if not data.get("has_more"):
+            break
+        cursor = data.get("next_cursor")
+
+    return {
+        "performers": performers,
+        "count": len(performers),
+        "note": (
+            f"Logged from direct outreach replies (last {months_back} months). "
+            "Treat as ✓ Confirmed."
+        ) if performers else "No outreach replies logged yet.",
+    }
+
+
 def generate_images(month_label: str, performer_page_ids: list[str]) -> dict:
     from .compositor import generate_and_upload_images
     return generate_and_upload_images(month_label, performer_page_ids)

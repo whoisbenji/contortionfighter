@@ -307,3 +307,88 @@ def get_alegria_history_for_display() -> list[dict]:
     """Return history with role+content for the dashboard to render."""
     return load_alegria_messages()
 
+
+# ── Varekai outreach history ──────────────────────────────────────────────────
+
+OUTREACH_HISTORY_FILE = Path(__file__).parent / "outreach_history.json"
+
+
+def _outreach_load() -> dict:
+    if OUTREACH_HISTORY_FILE.exists():
+        try:
+            return json.loads(OUTREACH_HISTORY_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"runs": []}
+
+
+def _outreach_save(data: dict) -> None:
+    OUTREACH_HISTORY_FILE.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def _outreach_update(run_id: str, **kwargs) -> None:
+    data = _outreach_load()
+    for run in data["runs"]:
+        if run["id"] == run_id:
+            run.update(kwargs)
+            break
+    _outreach_save(data)
+
+
+def create_outreach_run(run_mode: str = "full") -> str:
+    data = _outreach_load()
+    run_id = f"outreach-{run_mode}-{int(time.time())}"
+    run: dict[str, Any] = {
+        "id":               run_id,
+        "run_mode":         run_mode,
+        "created_at":       time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "completed_at":     None,
+        "status":           "running",
+        "phases_completed": [],
+        "phase1":           None,   # {eligible_count, skipped_reasons}
+        "phase2":           None,   # {sent_count, skipped_count, performer_ids_contacted}
+        "phase3":           None,   # {replies_logged}
+        "error":            None,
+    }
+    data["runs"].insert(0, run)
+    _outreach_save(data)
+    return run_id
+
+
+_OUTREACH_PHASE_KEYS = {1: "phase1", 2: "phase2", 3: "phase3"}
+
+
+def save_outreach_phase(run_id: str, phase: int, phase_data: dict) -> None:
+    data = _outreach_load()
+    for run in data["runs"]:
+        if run["id"] == run_id:
+            if phase not in run["phases_completed"]:
+                run["phases_completed"].append(phase)
+            key = _OUTREACH_PHASE_KEYS.get(phase)
+            if key:
+                run[key] = phase_data
+            break
+    _outreach_save(data)
+
+
+def complete_outreach_run(run_id: str) -> None:
+    _outreach_update(run_id, status="completed",
+                     completed_at=time.strftime("%Y-%m-%dT%H:%M:%S"))
+
+
+def fail_outreach_run(run_id: str, error: str) -> None:
+    _outreach_update(run_id, status="failed", error=error)
+
+
+def load_outreach_runs() -> list[dict]:
+    return _outreach_load().get("runs", [])
+
+
+def get_last_outreach_run() -> dict | None:
+    for run in _outreach_load().get("runs", []):
+        if run.get("status") == "completed":
+            return run
+    return None
+
