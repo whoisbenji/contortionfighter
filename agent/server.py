@@ -37,6 +37,7 @@ from . import memory as mem
 from .luzia_agent import run_with_callbacks
 from . import kooza_agent
 from . import alegria_agent
+from . import varekai_agent
 
 app = FastAPI(title="Contortion Space Agent Dashboard")
 
@@ -496,6 +497,143 @@ async def alegria_websocket_endpoint(ws: WebSocket):
     except WebSocketDisconnect:
         if session:
             session.msg_inbox.put(None)
+    except Exception as exc:
+        try:
+            await ws.send_text(json.dumps({"type": "error", "message": str(exc)}))
+        except Exception:
+            pass
+
+
+@app.get("/api/varekai/due")
+async def get_varekai_due():
+    from datetime import date as _date
+    last_run = mem.get_last_outreach_run()
+    if not last_run:
+        return JSONResponse({"due": True, "days_since_last": None, "next_due_in": 0})
+    last_date_str = (last_run.get("completed_at") or last_run.get("created_at", ""))[:10]
+    try:
+        last_date = _date.fromisoformat(last_date_str)
+        days_since = (_date.today() - last_date).days
+        return JSONResponse({
+            "due": days_since >= 90,
+            "days_since_last": days_since,
+            "next_due_in": max(0, 90 - days_since),
+            "last_run_date": last_date_str,
+            "last_run_status": last_run.get("status"),
+        })
+    except Exception:
+        return JSONResponse({"due": True, "days_since_last": None, "next_due_in": 0})
+
+
+# ── VarekaiSession ────────────────────────────────────────────────────────────
+
+class VarekaiSession:
+    def __init__(self, ws: WebSocket):
+        self.ws = ws
+        self.outbox:               queue.Queue[dict | None] = queue.Queue()
+        self.inbox:                queue.Queue[str]         = queue.Queue()
+        self.eligibility_inbox:    queue.Queue[dict]        = queue.Queue()
+        self.reply_inbox:          queue.Queue[list]        = queue.Queue()
+        self.thread: threading.Thread | None = None
+
+    def on_event(self, event: dict) -> None:
+        self.outbox.put(event)
+
+    def check_pause(self) -> str | None:
+        try:
+            return self.inbox.get_nowait()
+        except queue.Empty:
+            return None
+
+    def get_eligibility_decisions(self, performers: list[dict]) -> dict:
+        return self.eligibility_inbox.get()
+
+    def get_reply_decisions(self, performers: list[dict]) -> list:
+        return self.reply_inbox.get()
+
+    def get_user_input(self) -> str:
+        return self.inbox.get()
+
+    def start(self, run_mode: str) -> None:
+        def _run():
+            try:
+                varekai_agent.run_with_callbacks(
+                    run_mode=run_mode,
+                    on_event=self.on_event,
+                    check_pause=self.check_pause,
+                    get_eligibility_decisions=self.get_eligibility_decisions,
+                    get_reply_decisions=self.get_reply_decisions,
+                    get_user_input=self.get_user_input,
+                )
+            except Exception as exc:
+                self.outbox.put({"type": "error", "message": str(exc)})
+            finally:
+                self.outbox.put(None)
+
+        self.thread = threading.Thread(target=_run, daemon=True)
+        self.thread.start()
+
+
+# ── Varekai WebSocket endpoint ────────────────────────────────────────────────
+
+@app.websocket("/ws/varekai")
+async def varekai_websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    session: VarekaiSession | None = None
+    loop = asyncio.get_event_loop()
+
+    try:
+        raw = await ws.receive_text()
+        msg = json.loads(raw)
+
+        if msg.get("type") != "start":
+            await ws.send_text(json.dumps({"type": "error", "message": "First message must be {type:'start', run_mode:'...'}"}))
+            return
+
+        run_mode = msg.get("run_mode", "full")
+        session = VarekaiSession(ws)
+        session.start(run_mode)
+
+        await ws.send_text(json.dumps({"type": "started", "run_mode": run_mode}))
+
+        async def _pump_outbox():
+            while True:
+                event = await loop.run_in_executor(None, session.outbox.get)
+                if event is None:
+                    await ws.send_text(json.dumps({"type": "done"}))
+                    break
+                await ws.send_text(json.dumps(event))
+
+        async def _receive_controls():
+            while True:
+                try:
+                    raw = await ws.receive_text()
+                    ctrl = json.loads(raw)
+                    t = ctrl.get("type")
+                    if t == "eligibility_decisions":
+                        session.eligibility_inbox.put({
+                            "confirmed_ids": ctrl.get("confirmed_ids", []),
+                            "sent_ids":      ctrl.get("sent_ids", []),
+                            "skipped_ids":   ctrl.get("skipped_ids", []),
+                        })
+                    elif t == "reply_decisions":
+                        session.reply_inbox.put(ctrl.get("replies", []))
+                    elif t == "user_input":
+                        session.inbox.put(ctrl.get("message", ""))
+                    elif t == "outreach_sent":
+                        # Phase 2 mark-sent via WS: record immediately then ack
+                        page_id = ctrl.get("page_id", "")
+                        if page_id:
+                            from .varekai_tools import record_outreach_sent
+                            await loop.run_in_executor(None, record_outreach_sent, page_id)
+                            await ws.send_text(json.dumps({"type": "outreach_sent_ack", "page_id": page_id}))
+                except WebSocketDisconnect:
+                    break
+
+        await asyncio.gather(_pump_outbox(), _receive_controls())
+
+    except WebSocketDisconnect:
+        pass
     except Exception as exc:
         try:
             await ws.send_text(json.dumps({"type": "error", "message": str(exc)}))

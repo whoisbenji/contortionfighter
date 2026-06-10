@@ -63,6 +63,15 @@ if the user explicitly asks to open the agent panel themselves.
   Use run_kooza with a run_mode: full, update_only, deduplicate, or outreach. \
   You will be asked to relay update/dedup decisions to the user during the run.
 
+• **Varekai** (Performer Outreach Agent) — named after CdS's 2002 show ("wherever you go" \
+  in Romani). Runs the quarterly performer outreach cycle: identifies eligible performers \
+  (those not contacted in the last 75 days), presents personalised Instagram DM drafts for \
+  the editor to send manually, and logs performer replies (including upcoming show info) back \
+  to the ICPDB. Replies feed directly into Luzia's monthly research as ✓ Confirmed intelligence. \
+  Use run_varekai with a run_mode: full, send_queue (Phase 2 only), or log_replies (Phase 3 only). \
+  You will relay eligibility and reply decisions to the user during the run. \
+  When contacted by Varekai for context, your saved memories are passed to it automatically.
+
 ════════════════════════════════════════
 YOUR ROLE
 ════════════════════════════════════════
@@ -223,18 +232,42 @@ TOOLS: list[dict] = [
         },
     },
     {
+        "name": "run_varekai",
+        "description": (
+            "Run the Varekai Performer Outreach Agent directly. Use this when the user asks "
+            "to run the quarterly outreach cycle, check who is due for outreach, send DMs, "
+            "or log performer replies. Your saved memories are automatically passed to Varekai "
+            "as editorial context. You will relay eligibility and reply decisions to the user."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "run_mode": {
+                    "type": "string",
+                    "enum": ["full", "send_queue", "log_replies"],
+                    "description": (
+                        "full = eligibility audit + send queue + reply logging; "
+                        "send_queue = Phase 2 (send DMs) only; "
+                        "log_replies = Phase 3 (log replies) only."
+                    ),
+                },
+            },
+            "required": ["run_mode"],
+        },
+    },
+    {
         "name": "suggest_agent",
         "description": (
             "Show a launch card for a specialist agent WITHOUT running it. Only use this if "
             "the user explicitly wants to go to that agent's panel themselves. "
-            "Prefer run_luzia or run_kooza to actually execute the agent directly."
+            "Prefer run_luzia, run_kooza, or run_varekai to actually execute the agent directly."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "agent": {
                     "type": "string",
-                    "enum": ["luzia", "kooza"],
+                    "enum": ["luzia", "kooza", "varekai"],
                     "description": "Which agent to suggest",
                 },
                 "reason": {
@@ -246,7 +279,8 @@ TOOLS: list[dict] = [
                     "description": (
                         "Pre-filled launch parameters. "
                         "Luzia: {\"month_label\": \"June 2026\"}. "
-                        "Kooza: {\"run_mode\": \"full\"} — modes: full, update_only, deduplicate, outreach."
+                        "Kooza: {\"run_mode\": \"full\"} — modes: full, update_only, deduplicate, outreach. "
+                        "Varekai: {\"run_mode\": \"full\"} — modes: full, send_queue, log_replies."
                     ),
                 },
             },
@@ -324,14 +358,34 @@ TOOLS: list[dict] = [
 
 
 def _get_platform_status() -> dict:
+    from datetime import date as _date
     runs = mem.load_all_runs()
     icpdb_runs = mem.load_icpdb_runs()
+    outreach_runs = mem.load_outreach_runs()
     latest_review = next(
         (r for r in runs if r.get("status") == "completed"), None
     ) or (runs[0] if runs else None)
     latest_kooza = next(
         (r for r in icpdb_runs if r.get("status") == "completed"), None
     ) or (icpdb_runs[0] if icpdb_runs else None)
+    latest_outreach = mem.get_last_outreach_run()
+
+    outreach_info: dict = {"total_runs": len(outreach_runs)}
+    if latest_outreach:
+        last_date_str = (latest_outreach.get("completed_at") or latest_outreach.get("created_at", ""))[:10]
+        outreach_info["latest_date"] = last_date_str
+        outreach_info["latest_status"] = latest_outreach.get("status")
+        try:
+            last_date = _date.fromisoformat(last_date_str)
+            days_since = (_date.today() - last_date).days
+            outreach_info["days_since_last"] = days_since
+            outreach_info["next_due_in"] = max(0, 90 - days_since)
+            outreach_info["due"] = days_since >= 90
+        except Exception:
+            pass
+    else:
+        outreach_info["due"] = True
+
     return {
         "performance_review": {
             "total_runs": len(runs),
@@ -345,6 +399,7 @@ def _get_platform_status() -> dict:
             "latest_date": (latest_kooza.get("completed_at") or latest_kooza.get("started_at", ""))[:10] if latest_kooza else None,
             "latest_status": latest_kooza.get("status") if latest_kooza else None,
         },
+        "outreach": outreach_info,
     }
 
 
@@ -366,6 +421,17 @@ def _build_system_prompt() -> str:
             + "\n".join(f"• {m}" for m in memories)
         )
 
+    outreach = status["outreach"]
+    if outreach.get("latest_date"):
+        varekai_line = (
+            f"Varekai — last run: {outreach['latest_date']} ({outreach.get('latest_status', '—')}), "
+            f"days since: {outreach.get('days_since_last', '?')}, "
+            f"next due in: {outreach.get('next_due_in', '?')} days"
+            + (" ⚠ OVERDUE" if outreach.get("due") else "")
+        )
+    else:
+        varekai_line = "Varekai — never run (outreach overdue)"
+
     sections.append(
         f"════════════════════════════════════════\n"
         f"CURRENT PLATFORM STATUS  (today: {today})\n"
@@ -375,7 +441,8 @@ def _build_system_prompt() -> str:
         f"total reviews: {pr['total_runs']}\n"
         f"Kooza — last run: {icpdb['latest_mode'] or 'never'} mode "
         f"({icpdb['latest_date'] or '—'}, {icpdb['latest_status'] or '—'}), "
-        f"total ICPDB runs: {icpdb['total_runs']}"
+        f"total ICPDB runs: {icpdb['total_runs']}\n"
+        f"{varekai_line}"
     )
 
     return "\n\n".join(sections)
@@ -628,6 +695,107 @@ def _run_kooza_inline(inp: dict, on_event, get_user_message) -> dict:
         return {"status": "error", "error": str(exc)}
 
 
+def _run_varekai_inline(inp: dict, on_event, get_user_message) -> dict:
+    """Run Varekai inline, proxying its events and decisions through Alegría's chat."""
+    from . import varekai_agent
+
+    run_mode = inp.get("run_mode", "full")
+    context = mem.load_alegria_memories()
+
+    def sub_on_event(event):
+        t = event.get("type", "")
+        if t == "phase":
+            on_event({"type": "alegria_message",
+                      "text": f"**Varekai — Phase {event.get('phase')}: {event.get('label', '')}**"})
+        elif t == "summary":
+            on_event({"type": "alegria_message", "text": event.get("text", "")})
+        elif t == "error":
+            on_event({"type": "alegria_message",
+                      "text": f"⚠ Varekai error: {event.get('message', '')}"})
+        elif t in ("tool_call", "tool_result", "thinking", "thinking_delta", "thinking_done"):
+            pass
+        else:
+            on_event(event)
+
+    def sub_check_pause():
+        return None
+
+    def sub_get_eligibility_decisions(performers):
+        if not performers:
+            return {"confirmed_ids": []}
+        lines = [
+            f"**Varekai — {len(performers)} performer(s) eligible for outreach.** "
+            "Reply **all** to include everyone, or type numbers to **exclude** (e.g. `2, 5`):",
+            "",
+        ]
+        for i, p in enumerate(performers, 1):
+            handle = f" (@{p.get('instagram')})" if p.get("instagram") else ""
+            lines.append(f"{i}. **{p.get('name', '?')}**{handle}")
+        on_event({"type": "alegria_message", "text": "\n".join(lines)})
+        on_event({"type": "alegria_waiting"})
+
+        import re as _re
+        user_resp = get_user_message() or ""
+        lower = user_resp.strip().lower()
+        if not lower or lower in ("all", "yes", "include all", "everyone"):
+            return {"confirmed_ids": [p.get("id") for p in performers if p.get("id")]}
+        exclude_nums = {int(n) for n in _re.findall(r'\d+', user_resp)}
+        return {"confirmed_ids": [
+            p.get("id") for i, p in enumerate(performers, 1)
+            if p.get("id") and i not in exclude_nums
+        ]}
+
+    def sub_get_reply_decisions(performers):
+        if not performers:
+            return []
+        lines = [
+            f"**Varekai — log replies for {len(performers)} performer(s).** "
+            "For each, paste their reply (or leave blank for No Response). "
+            "Format: `N: <reply text>` or just press enter to skip:",
+            "",
+        ]
+        for i, p in enumerate(performers, 1):
+            lines.append(f"{i}. **{p.get('name', '?')}** (@{p.get('instagram', '?')})")
+        on_event({"type": "alegria_message", "text": "\n".join(lines)})
+        on_event({"type": "alegria_waiting"})
+
+        import re as _re
+        user_resp = get_user_message() or ""
+        decisions = []
+        for i, p in enumerate(performers, 1):
+            m = _re.search(rf'^{i}[.:\)]\s*(.+)$', user_resp, _re.MULTILINE)
+            if m:
+                reply_text = m.group(1).strip()
+                decisions.append({
+                    "page_id": p.get("id", ""),
+                    "reply_text": reply_text,
+                    "status": "Replied",
+                    "upcoming_shows": reply_text,
+                })
+            else:
+                decisions.append({
+                    "page_id": p.get("id", ""),
+                    "reply_text": "",
+                    "status": "No Response",
+                    "upcoming_shows": "",
+                })
+        return decisions
+
+    try:
+        varekai_agent.run_with_callbacks(
+            run_mode=run_mode,
+            on_event=sub_on_event,
+            check_pause=sub_check_pause,
+            get_eligibility_decisions=sub_get_eligibility_decisions,
+            get_reply_decisions=sub_get_reply_decisions,
+            get_user_input=lambda: get_user_message() or "",
+            context=context,
+        )
+        return {"status": "completed", "run_mode": run_mode}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
 _NOOP_EVENT = lambda event: None
 _NOOP_PAUSE = lambda: None
 
@@ -794,6 +962,10 @@ def run_with_callbacks(
                 on_event({"type": "alegria_message",
                           "text": f"Starting Kooza in **{inp.get('run_mode', 'full')}** mode…"})
                 result = _run_kooza_inline(inp, on_event, get_user_message)
+            elif name == "run_varekai":
+                on_event({"type": "alegria_message",
+                          "text": f"Starting Varekai in **{inp.get('run_mode', 'full')}** mode…"})
+                result = _run_varekai_inline(inp, on_event, get_user_message)
             elif name == "suggest_agent":
                 on_event({
                     "type":   "agent_suggestion",
