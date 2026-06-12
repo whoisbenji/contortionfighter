@@ -555,6 +555,7 @@
 
   <!-- ── Overview screen ── -->
   <div class="overview-screen" id="overview-screen">
+    <div id="due-tasks-banner" style="display:none;max-width:1200px;margin-bottom:24px"></div>
     <div class="overview-grid">
       <!-- Luzia card -->
       <div class="agent-card" id="overview-review-card">
@@ -1039,6 +1040,52 @@ async function loadOverview() {
       }
     }
   } catch {}
+
+  // Due tasks banner
+  try {
+    const allTasks = await fetch('/api/tasks').then(r => r.json());
+    renderDueTasks(allTasks.filter(t => t.due));
+  } catch {}
+}
+
+const TASK_LAUNCHERS = {
+  monthly_roundup: (t) => {
+    switchScreen('review');
+    const mi = document.getElementById('month-input');
+    if (mi && !mi.value) mi.value = t.action?.params?.month_label || '';
+  },
+  quarterly_outreach: () => { switchScreen('varekai'); startVarekaiRun('full'); },
+  icpdb_health: () => {
+    icpdbModeSelect.value = 'full';
+    switchScreen('icpdb');
+    setTimeout(() => startIcpdbRun(), 100);
+  },
+};
+
+function renderDueTasks(due) {
+  const banner = document.getElementById('due-tasks-banner');
+  if (!due.length) { banner.style.display = 'none'; return; }
+  banner.style.display = '';
+  banner.innerHTML = `
+    <div style="background:var(--bg2);border:1px solid var(--yellow);border-radius:12px;padding:16px 20px">
+      <div style="font-size:11px;font-family:var(--font-mono);color:var(--yellow);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">⚠ ${due.length} task${due.length > 1 ? 's' : ''} due</div>
+      ${due.map(t => `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0;border-top:1px solid var(--border)">
+          <div>
+            <div style="font-size:13px;font-weight:600">${esc(t.label)}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(t.detail)}</div>
+          </div>
+          <button class="btn btn-primary" style="white-space:nowrap" data-task-id="${esc(t.id)}">▶ Run now</button>
+        </div>
+      `).join('')}
+    </div>`;
+  banner.querySelectorAll('[data-task-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = due.find(x => x.id === btn.dataset.taskId);
+      const launch = TASK_LAUNCHERS[btn.dataset.taskId];
+      if (launch && t) launch(t);
+    });
+  });
 }
 
 function renderReviewCard(run) {

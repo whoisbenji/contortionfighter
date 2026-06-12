@@ -18,6 +18,7 @@ import anthropic
 
 from .tools import web_search, notion_search_performer, notion_search_pages, notion_fetch_page
 from . import memory as mem
+from . import tasks
 from .config import MODEL
 
 MAX_TOKENS = 4096
@@ -358,33 +359,16 @@ TOOLS: list[dict] = [
 
 
 def _get_platform_status() -> dict:
-    from datetime import date as _date
     runs = mem.load_all_runs()
     icpdb_runs = mem.load_icpdb_runs()
-    outreach_runs = mem.load_outreach_runs()
     latest_review = next(
         (r for r in runs if r.get("status") == "completed"), None
     ) or (runs[0] if runs else None)
     latest_kooza = next(
         (r for r in icpdb_runs if r.get("status") == "completed"), None
     ) or (icpdb_runs[0] if icpdb_runs else None)
-    latest_outreach = mem.get_last_outreach_run()
 
-    outreach_info: dict = {"total_runs": len(outreach_runs)}
-    if latest_outreach:
-        last_date_str = (latest_outreach.get("completed_at") or latest_outreach.get("created_at", ""))[:10]
-        outreach_info["latest_date"] = last_date_str
-        outreach_info["latest_status"] = latest_outreach.get("status")
-        try:
-            last_date = _date.fromisoformat(last_date_str)
-            days_since = (_date.today() - last_date).days
-            outreach_info["days_since_last"] = days_since
-            outreach_info["next_due_in"] = max(0, 90 - days_since)
-            outreach_info["due"] = days_since >= 90
-        except Exception:
-            pass
-    else:
-        outreach_info["due"] = True
+    varekai_task = next((t for t in tasks.get_tasks() if t["agent"] == "varekai"), {})
 
     return {
         "performance_review": {
@@ -399,7 +383,14 @@ def _get_platform_status() -> dict:
             "latest_date": (latest_kooza.get("completed_at") or latest_kooza.get("started_at", ""))[:10] if latest_kooza else None,
             "latest_status": latest_kooza.get("status") if latest_kooza else None,
         },
-        "outreach": outreach_info,
+        "outreach": {
+            "total_runs":      len(mem.load_outreach_runs()),
+            "due":             varekai_task.get("due", True),
+            "days_since_last": varekai_task.get("days_since_last"),
+            "next_due_in":     varekai_task.get("next_due_in"),
+            "latest_date":     varekai_task.get("last_run_date"),
+        },
+        "recurring_tasks": tasks.get_tasks(),
     }
 
 
@@ -421,17 +412,6 @@ def _build_system_prompt() -> str:
             + "\n".join(f"• {m}" for m in memories)
         )
 
-    outreach = status["outreach"]
-    if outreach.get("latest_date"):
-        varekai_line = (
-            f"Varekai — last run: {outreach['latest_date']} ({outreach.get('latest_status', '—')}), "
-            f"days since: {outreach.get('days_since_last', '?')}, "
-            f"next due in: {outreach.get('next_due_in', '?')} days"
-            + (" ⚠ OVERDUE" if outreach.get("due") else "")
-        )
-    else:
-        varekai_line = "Varekai — never run (outreach overdue)"
-
     sections.append(
         f"════════════════════════════════════════\n"
         f"CURRENT PLATFORM STATUS  (today: {today})\n"
@@ -441,8 +421,18 @@ def _build_system_prompt() -> str:
         f"total reviews: {pr['total_runs']}\n"
         f"Kooza — last run: {icpdb['latest_mode'] or 'never'} mode "
         f"({icpdb['latest_date'] or '—'}, {icpdb['latest_status'] or '—'}), "
-        f"total ICPDB runs: {icpdb['total_runs']}\n"
-        f"{varekai_line}"
+        f"total ICPDB runs: {icpdb['total_runs']}"
+    )
+
+    sections.append(
+        "════════════════════════════════════════\n"
+        "RECURRING TASKS (the publication's operating rhythm)\n"
+        "════════════════════════════════════════\n"
+        + "\n".join(tasks.tasks_summary_lines())
+        + "\n\nWhen a task is marked DUE, mention it proactively at a natural moment "
+        "(e.g. when greeting the user or when the conversation touches that area) and "
+        "offer to run it via run_luzia / run_kooza / run_varekai. Mention each due task "
+        "once per conversation — do not nag."
     )
 
     return "\n\n".join(sections)

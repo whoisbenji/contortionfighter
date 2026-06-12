@@ -34,6 +34,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config as cfg
 from . import memory as mem
+from . import tasks
 from .luzia_agent import run_with_callbacks
 from . import kooza_agent
 from . import alegria_agent
@@ -431,25 +432,21 @@ async def alegria_websocket_endpoint(ws: WebSocket):
             pass
 
 
+@app.get("/api/tasks")
+async def get_tasks():
+    """All recurring tasks (monthly roundup, quarterly outreach, ICPDB health)."""
+    return JSONResponse(tasks.get_tasks())
+
+
 @app.get("/api/varekai/due")
 async def get_varekai_due():
-    from datetime import date as _date
-    last_run = mem.get_last_outreach_run()
-    if not last_run:
-        return JSONResponse({"due": True, "days_since_last": None, "next_due_in": 0})
-    last_date_str = (last_run.get("completed_at") or last_run.get("created_at", ""))[:10]
-    try:
-        last_date = _date.fromisoformat(last_date_str)
-        days_since = (_date.today() - last_date).days
-        return JSONResponse({
-            "due": days_since >= 90,
-            "days_since_last": days_since,
-            "next_due_in": max(0, 90 - days_since),
-            "last_run_date": last_date_str,
-            "last_run_status": last_run.get("status"),
-        })
-    except Exception:
-        return JSONResponse({"due": True, "days_since_last": None, "next_due_in": 0})
+    t = next((t for t in tasks.get_tasks() if t["agent"] == "varekai"), {})
+    return JSONResponse({
+        "due":             t.get("due", True),
+        "days_since_last": t.get("days_since_last"),
+        "next_due_in":     t.get("next_due_in", 0),
+        "last_run_date":   t.get("last_run_date"),
+    })
 
 
 # ── Varekai WebSocket endpoint ────────────────────────────────────────────────
