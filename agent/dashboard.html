@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Contortion Space · Agent Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -19,7 +22,9 @@
     --yellow:    #ffd166;
     --green:     #4dff91;
     --text:      #e0dff0;
+    --text-dim:  #8a8799;
     --muted:     #5a586e;
+    --amber:     #ffd166;
     --font-mono: 'JetBrains Mono', 'Fira Mono', 'Consolas', monospace;
     --font-ui:   'Inter', 'Segoe UI', system-ui, sans-serif;
     --radius:    8px;
@@ -32,22 +37,23 @@
   .app {
     display: grid;
     grid-template-rows: 56px 1fr;
-    grid-template-columns: 300px 1fr;
-    grid-template-areas: "header header" "sidebar main";
+    grid-template-columns: 200px 300px 1fr;
+    grid-template-areas: "nav header header" "nav sidebar main";
     height: 100vh;
   }
 
   /* Screen-based layout overrides */
   .app[data-screen="alegria"] {
-    grid-template-columns: 1fr;
-    grid-template-areas: "header" "alegria-screen";
+    grid-template-columns: 200px 1fr;
+    grid-template-areas: "nav header" "nav alegria-screen";
   }
   .app[data-screen="overview"] {
-    grid-template-columns: 1fr;
-    grid-template-areas: "header" "overview-screen";
+    grid-template-columns: 200px 1fr;
+    grid-template-areas: "nav header" "nav overview-screen";
   }
   .app[data-screen="icpdb"] {
-    grid-template-areas: "header header" "sidebar main";
+    grid-template-columns: 200px 300px 1fr;
+    grid-template-areas: "nav header header" "nav sidebar main";
   }
 
   /* Hide irrelevant panels per screen */
@@ -61,14 +67,28 @@
   .app:not([data-screen="alegria"]) .alegria-screen { display: none !important; }
   .app:not([data-screen="varekai"]) .varekai-screen { display: none !important; }
   .app[data-screen="varekai"] {
-    grid-template-columns: 1fr;
-    grid-template-areas: "header" "varekai-screen";
+    grid-template-columns: 200px 1fr;
+    grid-template-areas: "nav header" "nav varekai-screen";
   }
+
+  /* ── Side nav ── */
+  .side-nav { grid-area: nav; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 18px 12px; gap: 2px; overflow-y: auto; }
+  .side-nav .logo { font-size: 16px; font-weight: 700; letter-spacing: -0.4px; padding: 2px 10px 18px; }
+  .side-nav .logo span { color: var(--purple); }
+  .nav-tab { display: flex; align-items: center; gap: 9px; background: transparent; border: none; border-radius: 8px; color: var(--text-dim); cursor: pointer; font-size: 13px; font-weight: 600; font-family: var(--font-ui); padding: 9px 10px; text-align: left; transition: all .15s; width: 100%; }
+  .nav-tab:hover { color: var(--text); background: rgba(255,255,255,.04); }
+  .nav-tab.active { color: var(--text); background: rgba(155,77,255,.14); }
+  .nav-tab.active .nav-tab-label { color: var(--purple); }
+  .nav-tab-label { flex: 1; }
+  .nav-dot { width: 7px; height: 7px; border-radius: 50%; background: transparent; flex-shrink: 0; transition: background .3s; }
+  .nav-dot.ok      { background: var(--green); }
+  .nav-dot.due     { background: var(--amber); box-shadow: 0 0 6px rgba(255,209,102,.6); }
+  .nav-dot.overdue { background: var(--red); box-shadow: 0 0 6px rgba(255,69,96,.6); }
+  .nav-divider { border: none; border-top: 1px solid var(--border); margin: 12px 6px; }
 
   /* ── Header ── */
   .header { grid-area: header; display: flex; align-items: center; gap: 12px; padding: 0 24px; background: var(--bg2); border-bottom: 1px solid var(--border); z-index: 10; }
-  .header .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
-  .header .logo span { color: var(--purple); }
+  .header .page-title { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
   .header .badge { font-size: 10px; font-family: var(--font-mono); background: var(--purple-dim); color: var(--purple); padding: 2px 8px; border-radius: 999px; letter-spacing: 1px; text-transform: uppercase; }
   .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
   #status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: background .3s, box-shadow .3s; }
@@ -81,11 +101,20 @@
   .btn-icon:hover { border-color: var(--purple); color: var(--text); }
   .btn-icon.active { border-color: var(--purple); color: var(--purple); }
 
-  /* ── Nav tabs ── */
-  .header-nav { display: flex; gap: 2px; }
-  .nav-tab { background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 600; padding: 0 16px; height: 56px; transition: all .15s; }
-  .nav-tab:hover { color: var(--text); }
-  .nav-tab.active { color: var(--purple); border-bottom-color: var(--purple); }
+  /* ── Mission control (home) components ── */
+  .mc-section-label { font-size: 11px; font-family: var(--font-mono); color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 12px; }
+  .mc-section { max-width: 1200px; margin-bottom: 36px; }
+  .task-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--green); border-radius: 10px; padding: 14px 18px; margin-bottom: 8px; }
+  .task-row.due { border-left-color: var(--amber); }
+  .task-row.overdue { border-left-color: var(--red); }
+  .task-row-label { font-size: 13px; font-weight: 600; }
+  .task-row-detail { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .task-row .btn { width: auto; white-space: nowrap; }
+  .task-row-status { font-size: 11px; font-family: var(--font-mono); color: var(--green); white-space: nowrap; }
+  .activity-row { display: flex; align-items: baseline; gap: 14px; padding: 8px 4px; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 12px; }
+  .activity-date { font-family: var(--font-mono); color: var(--muted); flex-shrink: 0; width: 78px; }
+  .activity-agent { font-weight: 700; color: var(--purple); flex-shrink: 0; width: 64px; }
+  .activity-text { color: var(--text-dim); }
 
   /* ── Alegría chat screen ── */
   .alegria-screen { grid-area: alegria-screen; display: flex; flex-direction: column; overflow: hidden; max-width: 760px; width: 100%; margin: 0 auto; padding: 0 24px; }
@@ -119,7 +148,7 @@
 
   /* ── Overview screen ── */
   .overview-screen { grid-area: overview-screen; overflow-y: auto; padding: 32px; }
-  .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1200px; }
+  .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; max-width: 1200px; }
   .agent-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
   .agent-card-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
   .agent-card-body { flex: 1; display: flex; flex-direction: column; gap: 12px; }
@@ -533,17 +562,21 @@
 <body>
 <div class="app" data-screen="alegria" id="app">
 
+  <!-- Side nav -->
+  <nav class="side-nav">
+    <div class="logo">Contortion <span>Space</span></div>
+    <button class="nav-tab" data-screen="overview"><span class="nav-tab-label">⌂ Home</span><span class="nav-dot" id="nav-dot-home"></span></button>
+    <button class="nav-tab active" data-screen="alegria"><span class="nav-tab-label">✦ Alegría</span></button>
+    <hr class="nav-divider" />
+    <button class="nav-tab" data-screen="review"><span class="nav-tab-label">🤸 Luzia</span><span class="nav-dot" id="nav-dot-luzia"></span></button>
+    <button class="nav-tab" data-screen="icpdb"><span class="nav-tab-label">🗂 Kooza</span><span class="nav-dot" id="nav-dot-kooza"></span></button>
+    <button class="nav-tab" data-screen="varekai"><span class="nav-tab-label">📮 Varekai</span><span class="nav-dot" id="nav-dot-varekai"></span></button>
+  </nav>
+
   <!-- Header -->
   <header class="header">
-    <div class="logo">Contortion <span>Space</span></div>
+    <div class="page-title" id="page-title">Alegría</div>
     <div class="badge">Agents</div>
-    <nav class="header-nav">
-      <button class="nav-tab active" data-screen="alegria">✦ Alegría</button>
-      <button class="nav-tab" data-screen="overview">Overview</button>
-      <button class="nav-tab" data-screen="review">Luzia</button>
-      <button class="nav-tab" data-screen="icpdb">Kooza</button>
-      <button class="nav-tab" data-screen="varekai">Varekai</button>
-    </nav>
     <div class="header-right">
       <div id="status-dot"></div>
       <span id="status-label">Idle</span>
@@ -553,9 +586,14 @@
     </div>
   </header>
 
-  <!-- ── Overview screen ── -->
+  <!-- ── Overview (Home / mission control) screen ── -->
   <div class="overview-screen" id="overview-screen">
-    <div id="due-tasks-banner" style="display:none;max-width:1200px;margin-bottom:24px"></div>
+    <div class="mc-section">
+      <div class="mc-section-label">Action queue</div>
+      <div id="due-tasks-banner"><div style="color:var(--muted);font-size:12px;font-family:var(--font-mono)">Loading…</div></div>
+    </div>
+    <div class="mc-section">
+    <div class="mc-section-label">Agents</div>
     <div class="overview-grid">
       <!-- Luzia card -->
       <div class="agent-card" id="overview-review-card">
@@ -590,6 +628,11 @@
           <button class="btn btn-muted" id="ov-log-replies-btn">📝 Log Replies</button>
         </div>
       </div>
+    </div>
+    </div>
+    <div class="mc-section">
+      <div class="mc-section-label">Recent activity</div>
+      <div id="activity-feed"><div style="color:var(--muted);font-size:12px;font-family:var(--font-mono)">Loading…</div></div>
     </div>
   </div>
 
@@ -996,8 +1039,17 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
   tab.addEventListener('click', () => switchScreen(tab.dataset.screen));
 });
 
+const PAGE_TITLES = {
+  alegria: 'Alegría — Assistant',
+  overview: 'Home',
+  review: 'Luzia — Monthly Roundup',
+  icpdb: 'Kooza — ICPDB Maintenance',
+  varekai: 'Varekai — Performer Outreach',
+};
+
 function switchScreen(screen) {
   appEl.dataset.screen = screen;
+  document.getElementById('page-title').textContent = PAGE_TITLES[screen] || '';
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.screen === screen));
   if (screen === 'overview') loadOverview();
   if (screen === 'icpdb') { loadIcpdbHistory(); buildIcpdbPhaseList(); }
@@ -1041,11 +1093,50 @@ async function loadOverview() {
     }
   } catch {}
 
-  // Due tasks banner
+  // Action queue + nav dots
   try {
     const allTasks = await fetch('/api/tasks').then(r => r.json());
-    renderDueTasks(allTasks.filter(t => t.due));
+    renderActionQueue(allTasks);
+    renderNavDots(allTasks);
   } catch {}
+
+  // Recent activity feed
+  try {
+    const activity = await fetch('/api/activity?limit=10').then(r => r.json());
+    renderActivity(activity);
+  } catch {}
+}
+
+const AGENT_NAMES = { luzia: 'Luzia', kooza: 'Kooza', varekai: 'Varekai' };
+
+function renderNavDots(allTasks) {
+  let anyDue = false;
+  for (const t of allTasks) {
+    const dot = document.getElementById(`nav-dot-${t.agent}`);
+    if (dot) dot.className = 'nav-dot ' + (t.due ? 'due' : 'ok');
+    if (t.due) anyDue = true;
+  }
+  const home = document.getElementById('nav-dot-home');
+  if (home) home.className = 'nav-dot ' + (anyDue ? 'due' : 'ok');
+}
+
+function activitySummary(run) {
+  const agent = run.agent || (run.month_label ? 'luzia' : run.audit ? 'kooza' : 'varekai');
+  if (run.month_label) return `${run.month_label} roundup ${run.status === 'completed' ? 'published' : run.status}`;
+  if (run.audit) return `Maintenance ${run.status} — health score ${run.audit.health_score ?? '?'}/100`;
+  if (run.phase2?.sent_count != null) return `Outreach sent to ${run.phase2.sent_count} performers`;
+  return `${run.run_mode || 'Run'} ${run.status}`;
+}
+
+function renderActivity(runs) {
+  const el = document.getElementById('activity-feed');
+  if (!runs.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">No completed runs yet.</div>'; return; }
+  el.innerHTML = runs.map(r => `
+    <div class="activity-row">
+      <span class="activity-date">${esc((r.completed_at || r.created_at || '').slice(0, 10))}</span>
+      <span class="activity-agent">${esc(AGENT_NAMES[r.agent] || r.agent || '—')}</span>
+      <span class="activity-text">${esc(activitySummary(r))}</span>
+    </div>`).join('');
 }
 
 const TASK_LAUNCHERS = {
@@ -1062,26 +1153,22 @@ const TASK_LAUNCHERS = {
   },
 };
 
-function renderDueTasks(due) {
+function renderActionQueue(allTasks) {
   const banner = document.getElementById('due-tasks-banner');
-  if (!due.length) { banner.style.display = 'none'; return; }
-  banner.style.display = '';
-  banner.innerHTML = `
-    <div style="background:var(--bg2);border:1px solid var(--yellow);border-radius:12px;padding:16px 20px">
-      <div style="font-size:11px;font-family:var(--font-mono);color:var(--yellow);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">⚠ ${due.length} task${due.length > 1 ? 's' : ''} due</div>
-      ${due.map(t => `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0;border-top:1px solid var(--border)">
-          <div>
-            <div style="font-size:13px;font-weight:600">${esc(t.label)}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(t.detail)}</div>
-          </div>
-          <button class="btn btn-primary" style="white-space:nowrap" data-task-id="${esc(t.id)}">▶ Run now</button>
-        </div>
-      `).join('')}
-    </div>`;
+  if (!allTasks.length) { banner.innerHTML = '<div style="color:var(--muted);font-size:12px">No recurring tasks configured.</div>'; return; }
+  banner.innerHTML = allTasks.map(t => `
+    <div class="task-row ${t.due ? 'due' : ''}">
+      <div>
+        <div class="task-row-label">${t.due ? '⚠ ' : '✓ '}${esc(t.label)}</div>
+        <div class="task-row-detail">${esc(t.detail)}</div>
+      </div>
+      ${t.due
+        ? `<button class="btn btn-primary" data-task-id="${esc(t.id)}">▶ Run now</button>`
+        : `<span class="task-row-status">${t.next_due_in != null ? `next in ${t.next_due_in}d` : 'up to date'}</span>`}
+    </div>`).join('');
   banner.querySelectorAll('[data-task-id]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const t = due.find(x => x.id === btn.dataset.taskId);
+      const t = allTasks.find(x => x.id === btn.dataset.taskId);
       const launch = TASK_LAUNCHERS[btn.dataset.taskId];
       if (launch && t) launch(t);
     });
@@ -3094,6 +3181,13 @@ document.getElementById('ov-log-replies-btn')?.addEventListener('click', () => {
 
 // Load Varekai status on init and on tab switch
 loadVarekaiStatus();
+
+// Nav status dots on startup, refreshed every 5 minutes
+async function refreshNavDots() {
+  try { renderNavDots(await fetch('/api/tasks').then(r => r.json())); } catch {}
+}
+refreshNavDots();
+setInterval(refreshNavDots, 5 * 60 * 1000);
 
 </script>
 </body>

@@ -438,6 +438,24 @@ async def get_tasks():
     return JSONResponse(tasks.get_tasks())
 
 
+@app.get("/api/activity")
+async def get_activity(limit: int = 10):
+    """Most recent completed runs across all agents, for the home activity feed."""
+    from . import run_store
+    with run_store._connect() as conn:
+        rows = conn.execute(
+            "SELECT agent, data FROM runs WHERE status = 'completed' "
+            "ORDER BY completed_at DESC LIMIT ?",
+            (max(1, min(limit, 50)),),
+        ).fetchall()
+    out = []
+    for agent, data in rows:
+        record = json.loads(data)
+        record["agent"] = agent
+        out.append(record)
+    return JSONResponse(out)
+
+
 @app.get("/api/varekai/due")
 async def get_varekai_due():
     t = next((t for t in tasks.get_tasks() if t["agent"] == "varekai"), {})
