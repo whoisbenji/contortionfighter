@@ -3,6 +3,10 @@ Hardcoded IDs for the Contortion Space Notion + Webflow integrations.
 All IDs were read directly from the live workspace / site.
 """
 
+# ── Claude ───────────────────────────────────────────────────────────────────
+MODEL = "claude-sonnet-4-6"
+MAX_TOKENS = 8192
+
 # ── Notion ──────────────────────────────────────────────────────────────────
 NOTION_VERSION = "2022-06-28"
 NOTION_BASE = "https://api.notion.com/v1"

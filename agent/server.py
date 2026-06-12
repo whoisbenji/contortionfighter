@@ -47,16 +47,21 @@ _output_dir.mkdir(exist_ok=True)
 app.mount("/output", StaticFiles(directory=str(_output_dir)), name="output")
 
 
-# ── AgentSession ─────────────────────────────────────────────────────────────
+# ── Agent session (shared by Luzia / Kooza / Varekai) ────────────────────────
 
-class AgentSession:
-    def __init__(self, ws: WebSocket):
-        self.ws = ws
-        self.outbox:           queue.Queue[dict | None] = queue.Queue()
-        self.inbox:            queue.Queue[str]         = queue.Queue()
-        self.review_inbox:     queue.Queue[dict]        = queue.Queue()
-        self.user_input_inbox: queue.Queue[str]         = queue.Queue()
-        self.photo_url_inbox:  queue.Queue[dict]        = queue.Queue()
+class Session:
+    """One running agent thread bridged to one WebSocket.
+
+    All human-in-the-loop decisions flow through a single queue: the agent
+    calls decide(kind, payload), which emits {"type": kind, **payload} to the
+    dashboard and blocks until a decision message arrives. On disconnect a
+    None sentinel unblocks the thread (the runtime raises DecisionAborted).
+    """
+
+    def __init__(self):
+        self.outbox:         queue.Queue[dict | None] = queue.Queue()
+        self.inbox:          queue.Queue[str]         = queue.Queue()  # interjections
+        self.decision_inbox: queue.Queue              = queue.Queue()
         self.pause_requested = threading.Event()
         self.thread: threading.Thread | None = None
 
@@ -77,30 +82,17 @@ class AgentSession:
         self.outbox.put({"type": "resumed", "message": msg})
         return msg
 
-    def get_performer_review(self, performers: list[dict]) -> dict:
-        return self.review_inbox.get()
+    def decide(self, kind: str, payload: dict):
+        self.outbox.put({"type": kind, **payload})
+        return self.decision_inbox.get()
 
-    def get_user_input(self) -> str:
-        return self.user_input_inbox.get()
+    def abort_pending_decision(self) -> None:
+        self.decision_inbox.put(None)
 
-    def get_photo_urls(self, performers: list[dict]) -> dict:
-        return self.photo_url_inbox.get()
-
-    def start(self, month_label: str, run_id: str | None,
-              replay_from: int, cached_run: dict | None) -> None:
+    def start(self, target) -> None:
         def _run():
             try:
-                run_with_callbacks(
-                    month_label=month_label,
-                    on_event=self.on_event,
-                    check_pause=self.check_pause,
-                    get_performer_review=self.get_performer_review,
-                    get_user_input=self.get_user_input,
-                    get_photo_urls=self.get_photo_urls,
-                    run_id=run_id,
-                    replay_from=replay_from,
-                    cached_run=cached_run,
-                )
+                target()
             except Exception as exc:
                 self.outbox.put({"type": "error", "message": str(exc)})
             finally:
@@ -110,77 +102,96 @@ class AgentSession:
         self.thread.start()
 
 
-# ── WebSocket endpoint ────────────────────────────────────────────────────────
+# Legacy WS message types from the dashboard, mapped to decision values.
+_DECISION_MESSAGES = {
+    "performer_decisions":   lambda c: {"decisions": c.get("decisions", [])},
+    "update_decisions":      lambda c: {"decisions": c.get("decisions", [])},
+    "dedup_decisions":       lambda c: {"decisions": c.get("decisions", [])},
+    "user_input":            lambda c: c.get("message", ""),
+    "photo_urls":            lambda c: c.get("urls", {}),
+    "eligibility_decisions": lambda c: {
+        "confirmed_ids": c.get("confirmed_ids", []),
+        "sent_ids":      c.get("sent_ids", []),
+        "skipped_ids":   c.get("skipped_ids", []),
+    },
+    "reply_decisions":       lambda c: c.get("replies", []),
+    "decision_response":     lambda c: c.get("data"),
+}
+
+
+async def _serve_agent(ws: WebSocket, session: Session, target) -> None:
+    """Pump agent events to the socket and route control messages back."""
+    loop = asyncio.get_event_loop()
+    session.start(target)
+
+    async def _pump_outbox():
+        while True:
+            event = await loop.run_in_executor(None, session.outbox.get)
+            if event is None:
+                await ws.send_text(json.dumps({"type": "done"}))
+                break
+            await ws.send_text(json.dumps(event))
+
+    async def _receive_controls():
+        while True:
+            try:
+                raw = await ws.receive_text()
+                ctrl = json.loads(raw)
+                t = ctrl.get("type")
+                if t in _DECISION_MESSAGES:
+                    session.decision_inbox.put(_DECISION_MESSAGES[t](ctrl))
+                elif t == "interject":
+                    session.inbox.put(ctrl.get("message", ""))
+                elif t == "pause":
+                    session.pause_requested.set()
+                elif t == "resume":
+                    session.inbox.put(ctrl.get("message", ""))
+                elif t == "outreach_sent":
+                    # Varekai send queue: record a sent DM in Notion immediately
+                    page_id = ctrl.get("page_id", "")
+                    if page_id:
+                        from .varekai_tools import record_outreach_sent
+                        await loop.run_in_executor(None, record_outreach_sent, page_id)
+                        await ws.send_text(json.dumps({"type": "outreach_sent_ack", "page_id": page_id}))
+            except WebSocketDisconnect:
+                session.abort_pending_decision()
+                break
+
+    await asyncio.gather(_pump_outbox(), _receive_controls())
+
+
+# ── WebSocket endpoints ───────────────────────────────────────────────────────
 
 @app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
+async def luzia_websocket_endpoint(ws: WebSocket):
     await ws.accept()
-    session: AgentSession | None = None
-    loop = asyncio.get_event_loop()
-
     try:
-        raw = await ws.receive_text()
-        msg = json.loads(raw)
-
+        msg = json.loads(await ws.receive_text())
         if msg.get("type") != "start":
             await ws.send_text(json.dumps({"type": "error", "message": "First message must be {type:'start', month:'...'}"}))
             return
-
         month_label = msg.get("month", "").strip()
         if not month_label:
             await ws.send_text(json.dumps({"type": "error", "message": "month is required"}))
             return
 
-        # Apply admin-panel config overrides
         cfg.set_overrides(msg.get("db_config", {}))
-
-        # Replay support
         replay_from   = int(msg.get("replay_from", 1))
         replay_run_id = msg.get("replay_run_id")
         cached_run    = mem.get_run(replay_run_id) if replay_run_id else None
 
-        session = AgentSession(ws)
-        session.start(month_label, replay_run_id, replay_from, cached_run)
-
-        await ws.send_text(json.dumps({
-            "type": "started", "month": month_label,
-            "replay_from": replay_from,
-        }))
-
-        async def _pump_outbox():
-            while True:
-                event = await loop.run_in_executor(None, session.outbox.get)
-                if event is None:
-                    await ws.send_text(json.dumps({"type": "done"}))
-                    break
-                await ws.send_text(json.dumps(event))
-
-        async def _receive_controls():
-            while True:
-                try:
-                    raw = await ws.receive_text()
-                    ctrl = json.loads(raw)
-                    t = ctrl.get("type")
-                    if t == "interject":
-                        session.inbox.put(ctrl.get("message", ""))
-                    elif t == "pause":
-                        session.pause_requested.set()
-                    elif t == "resume":
-                        try:
-                            session.inbox.put_nowait(ctrl.get("message", ""))
-                        except queue.Full:
-                            pass
-                    elif t == "performer_decisions":
-                        session.review_inbox.put({"decisions": ctrl.get("decisions", [])})
-                    elif t == "user_input":
-                        session.user_input_inbox.put(ctrl.get("message", ""))
-                    elif t == "photo_urls":
-                        session.photo_url_inbox.put(ctrl.get("urls", {}))
-                except WebSocketDisconnect:
-                    break
-
-        await asyncio.gather(_pump_outbox(), _receive_controls())
-
+        session = Session()
+        await ws.send_text(json.dumps({"type": "started", "month": month_label,
+                                       "replay_from": replay_from}))
+        await _serve_agent(ws, session, lambda: run_with_callbacks(
+            month_label=month_label,
+            on_event=session.on_event,
+            check_pause=session.check_pause,
+            decide=session.decide,
+            run_id=replay_run_id,
+            replay_from=replay_from,
+            cached_run=cached_run,
+        ))
     except WebSocketDisconnect:
         pass
     except Exception as exc:
@@ -255,112 +266,28 @@ async def save_feedback(request: Request):
 
 # ── Serve dashboard HTML ──────────────────────────────────────────────────────
 
-# ── ICPDBSession ──────────────────────────────────────────────────────────────
-
-class ICPDBSession:
-    def __init__(self, ws: WebSocket, prefs: dict | None = None):
-        self.ws = ws
-        self.prefs = prefs or {}
-        self.outbox:                 queue.Queue[dict | None] = queue.Queue()
-        self.inbox:                  queue.Queue[str]         = queue.Queue()
-        self.update_decisions_inbox: queue.Queue[dict]        = queue.Queue()
-        self.pause_requested = threading.Event()
-        self.thread: threading.Thread | None = None
-
-    def on_event(self, event: dict) -> None:
-        self.outbox.put(event)
-
-    def check_pause(self) -> str | None:
-        if not self.pause_requested.is_set():
-            try:
-                msg = self.inbox.get_nowait()
-                self.outbox.put({"type": "injected", "message": msg})
-                return msg
-            except queue.Empty:
-                return None
-        self.outbox.put({"type": "paused", "message": "Agent paused — waiting for your input."})
-        self.pause_requested.clear()
-        msg = self.inbox.get()
-        self.outbox.put({"type": "resumed", "message": msg})
-        return msg
-
-    def get_update_decisions(self, proposals: list[dict]) -> dict:
-        return self.update_decisions_inbox.get()
-
-    def start(self, run_mode: str) -> None:
-        def _run():
-            try:
-                kooza_agent.run_with_callbacks(
-                    on_event=self.on_event,
-                    check_pause=self.check_pause,
-                    get_update_decisions=self.get_update_decisions,
-                    run_mode=run_mode,
-                    prefs=self.prefs,
-                )
-            except Exception as exc:
-                self.outbox.put({"type": "error", "message": str(exc)})
-            finally:
-                self.outbox.put(None)
-
-        self.thread = threading.Thread(target=_run, daemon=True)
-        self.thread.start()
-
-
-# ── ICPDB WebSocket endpoint ──────────────────────────────────────────────────
+# ── ICPDB (Kooza) WebSocket endpoint ──────────────────────────────────────────
 
 @app.websocket("/ws/icpdb")
 async def icpdb_websocket_endpoint(ws: WebSocket):
     await ws.accept()
-    session: ICPDBSession | None = None
-    loop = asyncio.get_event_loop()
-
     try:
-        raw = await ws.receive_text()
-        msg = json.loads(raw)
-
+        msg = json.loads(await ws.receive_text())
         if msg.get("type") != "start":
             await ws.send_text(json.dumps({"type": "error", "message": "First message must be {type:'start', run_mode:'...'}"}))
             return
 
         run_mode = msg.get("run_mode", "full")
         prefs = mem.get_icpdb_prefs()
-        session = ICPDBSession(ws, prefs=prefs)
-        session.start(run_mode)
-
+        session = Session()
         await ws.send_text(json.dumps({"type": "started", "run_mode": run_mode}))
-
-        async def _pump_outbox():
-            while True:
-                event = await loop.run_in_executor(None, session.outbox.get)
-                if event is None:
-                    await ws.send_text(json.dumps({"type": "done"}))
-                    break
-                await ws.send_text(json.dumps(event))
-
-        async def _receive_controls():
-            while True:
-                try:
-                    raw = await ws.receive_text()
-                    ctrl = json.loads(raw)
-                    t = ctrl.get("type")
-                    if t == "interject":
-                        session.inbox.put(ctrl.get("message", ""))
-                    elif t == "pause":
-                        session.pause_requested.set()
-                    elif t == "resume":
-                        try:
-                            session.inbox.put_nowait(ctrl.get("message", ""))
-                        except queue.Full:
-                            pass
-                    elif t == "update_decisions":
-                        session.update_decisions_inbox.put({"decisions": ctrl.get("decisions", [])})
-                    elif t == "dedup_decisions":
-                        session.update_decisions_inbox.put({"decisions": ctrl.get("decisions", [])})
-                except WebSocketDisconnect:
-                    break
-
-        await asyncio.gather(_pump_outbox(), _receive_controls())
-
+        await _serve_agent(ws, session, lambda: kooza_agent.run_with_callbacks(
+            on_event=session.on_event,
+            check_pause=session.check_pause,
+            decide=session.decide,
+            run_mode=run_mode,
+            prefs=prefs,
+        ))
     except WebSocketDisconnect:
         pass
     except Exception as exc:
@@ -525,113 +452,26 @@ async def get_varekai_due():
         return JSONResponse({"due": True, "days_since_last": None, "next_due_in": 0})
 
 
-# ── VarekaiSession ────────────────────────────────────────────────────────────
-
-class VarekaiSession:
-    def __init__(self, ws: WebSocket):
-        self.ws = ws
-        self.outbox:               queue.Queue[dict | None] = queue.Queue()
-        self.inbox:                queue.Queue[str]         = queue.Queue()
-        self.eligibility_inbox:    queue.Queue[dict]        = queue.Queue()
-        self.reply_inbox:          queue.Queue[list]        = queue.Queue()
-        self.thread: threading.Thread | None = None
-
-    def on_event(self, event: dict) -> None:
-        self.outbox.put(event)
-
-    def check_pause(self) -> str | None:
-        try:
-            return self.inbox.get_nowait()
-        except queue.Empty:
-            return None
-
-    def get_eligibility_decisions(self, performers: list[dict]) -> dict:
-        return self.eligibility_inbox.get()
-
-    def get_reply_decisions(self, performers: list[dict]) -> list:
-        return self.reply_inbox.get()
-
-    def get_user_input(self) -> str:
-        return self.inbox.get()
-
-    def start(self, run_mode: str) -> None:
-        def _run():
-            try:
-                varekai_agent.run_with_callbacks(
-                    run_mode=run_mode,
-                    on_event=self.on_event,
-                    check_pause=self.check_pause,
-                    get_eligibility_decisions=self.get_eligibility_decisions,
-                    get_reply_decisions=self.get_reply_decisions,
-                    get_user_input=self.get_user_input,
-                )
-            except Exception as exc:
-                self.outbox.put({"type": "error", "message": str(exc)})
-            finally:
-                self.outbox.put(None)
-
-        self.thread = threading.Thread(target=_run, daemon=True)
-        self.thread.start()
-
-
 # ── Varekai WebSocket endpoint ────────────────────────────────────────────────
 
 @app.websocket("/ws/varekai")
 async def varekai_websocket_endpoint(ws: WebSocket):
     await ws.accept()
-    session: VarekaiSession | None = None
-    loop = asyncio.get_event_loop()
-
     try:
-        raw = await ws.receive_text()
-        msg = json.loads(raw)
-
+        msg = json.loads(await ws.receive_text())
         if msg.get("type") != "start":
             await ws.send_text(json.dumps({"type": "error", "message": "First message must be {type:'start', run_mode:'...'}"}))
             return
 
         run_mode = msg.get("run_mode", "full")
-        session = VarekaiSession(ws)
-        session.start(run_mode)
-
+        session = Session()
         await ws.send_text(json.dumps({"type": "started", "run_mode": run_mode}))
-
-        async def _pump_outbox():
-            while True:
-                event = await loop.run_in_executor(None, session.outbox.get)
-                if event is None:
-                    await ws.send_text(json.dumps({"type": "done"}))
-                    break
-                await ws.send_text(json.dumps(event))
-
-        async def _receive_controls():
-            while True:
-                try:
-                    raw = await ws.receive_text()
-                    ctrl = json.loads(raw)
-                    t = ctrl.get("type")
-                    if t == "eligibility_decisions":
-                        session.eligibility_inbox.put({
-                            "confirmed_ids": ctrl.get("confirmed_ids", []),
-                            "sent_ids":      ctrl.get("sent_ids", []),
-                            "skipped_ids":   ctrl.get("skipped_ids", []),
-                        })
-                    elif t == "reply_decisions":
-                        session.reply_inbox.put(ctrl.get("replies", []))
-                    elif t == "user_input":
-                        session.inbox.put(ctrl.get("message", ""))
-                    elif t == "outreach_sent":
-                        # Phase 2 mark-sent via WS: record immediately then ack
-                        page_id = ctrl.get("page_id", "")
-                        if page_id:
-                            from .varekai_tools import record_outreach_sent
-                            await loop.run_in_executor(None, record_outreach_sent, page_id)
-                            await ws.send_text(json.dumps({"type": "outreach_sent_ack", "page_id": page_id}))
-                except WebSocketDisconnect:
-                    break
-
-        await asyncio.gather(_pump_outbox(), _receive_controls())
-
+        await _serve_agent(ws, session, lambda: varekai_agent.run_with_callbacks(
+            run_mode=run_mode,
+            on_event=session.on_event,
+            check_pause=session.check_pause,
+            decide=session.decide,
+        ))
     except WebSocketDisconnect:
         pass
     except Exception as exc:

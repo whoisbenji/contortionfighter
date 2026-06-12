@@ -8,13 +8,7 @@ and reply logging — all with human-in-the-loop sending via Instagram.
 
 from __future__ import annotations
 
-import json
-import os
-import time
-from typing import Any
-
-import anthropic
-
+from .agent_runtime import AgentContext, AgentSpec, run_loop
 from .varekai_prompts import SYSTEM_PROMPT, phase_prompt
 from .varekai_tools import (
     fetch_performers_with_outreach_fields,
@@ -24,9 +18,6 @@ from .varekai_tools import (
 )
 from .kooza_tools import draft_outreach_messages
 from . import memory as mem
-
-MODEL = "claude-sonnet-4-6"
-MAX_TOKENS = 8192
 
 # ── Tool schemas ──────────────────────────────────────────────────────────────
 
@@ -168,224 +159,90 @@ TOOLS: list[dict] = [
     },
 ]
 
-# ── Tool dispatch ─────────────────────────────────────────────────────────────
 
-TOOL_FUNCTIONS: dict[str, Any] = {
+def get_reply_log() -> dict:
+    """Performer IDs contacted in the most recent outreach run."""
+    last_run = mem.get_last_outreach_run()
+    if last_run and last_run.get("phase2"):
+        ids = last_run["phase2"].get("performer_ids_contacted", [])
+        return {"performer_ids": ids, "count": len(ids)}
+    return {"performer_ids": [], "count": 0, "note": "No previous outreach run found."}
+
+
+TOOL_FUNCTIONS = {
     "fetch_performers_with_outreach_fields": fetch_performers_with_outreach_fields,
-    "check_eligibility":      check_eligibility,
+    "check_eligibility":       check_eligibility,
     "draft_outreach_messages": draft_outreach_messages,
-    "record_outreach_sent":   record_outreach_sent,
-    "log_outreach_reply":     log_outreach_reply,
+    "record_outreach_sent":    record_outreach_sent,
+    "log_outreach_reply":      log_outreach_reply,
+    "get_reply_log":           get_reply_log,
+}
+
+TOOL_PHASE_MAP = {
+    "fetch_performers_with_outreach_fields": (1, "Eligibility Audit"),
+    "check_eligibility":                     (1, "Eligibility Audit"),
+    "draft_outreach_messages":               (2, "Send Queue"),
+    "propose_outreach_queue":                (2, "Send Queue"),
+    "record_outreach_sent":                  (2, "Send Queue"),
+    "get_reply_log":                         (3, "Reply Logging"),
+    "propose_reply_logging":                 (3, "Reply Logging"),
+    "log_outreach_reply":                    (3, "Reply Logging"),
 }
 
 
-def _dispatch(tool_name: str, tool_input: dict) -> Any:
-    fn = TOOL_FUNCTIONS.get(tool_name)
-    if fn is None:
-        return {"error": f"Unknown tool: {tool_name}"}
-    try:
-        return fn(**tool_input)
-    except Exception as exc:
-        return {"error": str(exc)}
+# ── Agent spec ────────────────────────────────────────────────────────────────
 
+def _make_spec(run_id: str) -> AgentSpec:
 
-# ── Streaming helper ──────────────────────────────────────────────────────────
+    def h_propose_queue(tool_input: dict, ctx: AgentContext) -> dict:
+        stage = tool_input.get("stage", "eligibility")
+        performers = tool_input.get("performers", [])
+        skipped = tool_input.get("skipped", [])
+        decisions = ctx.decide("outreach_queue", {
+            "stage": stage, "performers": performers, "skipped": skipped,
+        })
 
-def _stream_response(client, on_event, **kwargs):
-    text_buf = ""
-    content = []
-    stop_reason = None
-
-    on_event({"type": "thinking"})
-
-    with client.messages.stream(**kwargs) as stream:
-        for event in stream:
-            etype = getattr(event, "type", "")
-            if etype == "content_block_start":
-                block = getattr(event, "content_block", None)
-                if block:
-                    content.append(block)
-            elif etype == "content_block_delta":
-                delta = getattr(event, "delta", None)
-                if delta:
-                    dtype = getattr(delta, "type", "")
-                    if dtype == "text_delta":
-                        text_buf += delta.text
-                        on_event({"type": "thinking_delta", "text": delta.text})
-                    elif dtype == "thinking_delta":
-                        on_event({"type": "thinking_delta", "text": delta.thinking})
-            elif etype == "content_block_stop":
-                pass
-            elif etype == "message_stop":
-                stop_reason = getattr(stream.get_final_message(), "stop_reason", None)
-
-    if text_buf:
-        on_event({"type": "thinking_done", "text": text_buf})
-
-    final = stream.get_final_message()
-    return final
-
-
-# ── Main agent loop ───────────────────────────────────────────────────────────
-
-def _loop(
-    messages: list[dict],
-    run_id: str,
-    on_event,
-    check_pause,
-    get_eligibility_decisions,
-    get_reply_decisions,
-    get_user_input,
-    context: list[str] | None = None,
-    verbose: bool = False,
-) -> str:
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    _sent_ids: list[str] = []
-
-    while True:
-        response = _stream_response(
-            client,
-            on_event,
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=SYSTEM_PROMPT,
-            tools=TOOLS,
-            messages=messages,
-        )
-
-        messages.append({"role": "assistant", "content": response.content})
-
-        if response.stop_reason == "end_turn":
-            final = "".join(b.text for b in response.content if hasattr(b, "text"))
-            on_event({"type": "summary", "text": final})
-            return final
-
-        if response.stop_reason != "tool_use":
-            break
-
-        tool_results = []
-        for block in response.content:
-            if not hasattr(block, "type") or block.type != "tool_use":
-                continue
-
-            tool_name  = block.name
-            tool_input = block.input or {}
-
-            on_event({
-                "type":  "tool_call",
-                "tool":  tool_name,
-                "input": {k: (v[:200] + "…" if isinstance(v, str) and len(v) > 200 else v)
-                          for k, v in tool_input.items()},
+        if stage == "send_queue":
+            sent_ids = decisions.get("sent_ids", [])
+            mem.save_outreach_phase(run_id, 2, {
+                "sent_count":    len(sent_ids),
+                "skipped_count": len(decisions.get("skipped_ids", [])),
+                "performer_ids_contacted": sent_ids,
             })
+            return {
+                "sent_ids":    sent_ids,
+                "skipped_ids": decisions.get("skipped_ids", []),
+                "sent_count":  len(sent_ids),
+            }
 
-            # ── Blocking: eligibility / send queue ───────────────────────────
-            if tool_name == "propose_outreach_queue":
-                stage = tool_input.get("stage", "eligibility")
-                performers = tool_input.get("performers", [])
-                skipped = tool_input.get("skipped", [])
-                on_event({
-                    "type":      "outreach_queue",
-                    "stage":     stage,
-                    "performers": performers,
-                    "skipped":   skipped,
-                })
-                decisions = get_eligibility_decisions(performers)
-                # decisions = {confirmed_ids: [...], sent_ids: [...], skipped_ids: [...]}
-                if stage == "send_queue":
-                    sent_ids = decisions.get("sent_ids", [])
-                    _sent_ids.extend(sent_ids)
-                    result = {
-                        "sent_ids":    sent_ids,
-                        "skipped_ids": decisions.get("skipped_ids", []),
-                        "sent_count":  len(sent_ids),
-                    }
-                    mem.save_outreach_phase(run_id, 2, {
-                        "sent_count":    len(sent_ids),
-                        "skipped_count": len(decisions.get("skipped_ids", [])),
-                        "performer_ids_contacted": sent_ids,
-                    })
-                else:
-                    confirmed = decisions.get("confirmed_ids", [pid for p in performers if (pid := p.get("id"))])
-                    result = {
-                        "confirmed_performers": [p for p in performers if p.get("id") in confirmed],
-                        "confirmed_count": len(confirmed),
-                    }
-                    mem.save_outreach_phase(run_id, 1, {
-                        "eligible_count": len(performers),
-                        "confirmed_count": len(confirmed),
-                    })
+        confirmed = decisions.get("confirmed_ids",
+                                  [p.get("id") for p in performers if p.get("id")])
+        mem.save_outreach_phase(run_id, 1, {
+            "eligible_count":  len(performers),
+            "confirmed_count": len(confirmed),
+        })
+        return {
+            "confirmed_performers": [p for p in performers if p.get("id") in confirmed],
+            "confirmed_count":      len(confirmed),
+        }
 
-                tool_results.append({
-                    "type":        "tool_result",
-                    "tool_use_id": block.id,
-                    "content":     json.dumps(result),
-                })
-                on_event({"type": "tool_result", "tool": tool_name,
-                          "result": json.dumps(result)[:300], "ok": True})
-                continue
+    def h_propose_reply_logging(tool_input: dict, ctx: AgentContext) -> dict:
+        performers = tool_input.get("performers", [])
+        replies = ctx.decide("outreach_reply_log", {"performers": performers})
+        mem.save_outreach_phase(run_id, 3, {"replies_logged": len(replies)})
+        return {"logged": len(replies), "replies": replies}
 
-            # ── Blocking: reply logging ───────────────────────────────────────
-            if tool_name == "propose_reply_logging":
-                performers = tool_input.get("performers", [])
-                on_event({"type": "outreach_reply_log", "performers": performers})
-                decisions = get_reply_decisions(performers)
-                # decisions = [{page_id, reply_text, upcoming_shows, status}, ...]
-                result = {"logged": len(decisions), "replies": decisions}
-                mem.save_outreach_phase(run_id, 3, {"replies_logged": len(decisions)})
-                tool_results.append({
-                    "type":        "tool_result",
-                    "tool_use_id": block.id,
-                    "content":     json.dumps(result),
-                })
-                on_event({"type": "tool_result", "tool": tool_name,
-                          "result": f"Logged {len(decisions)} replies", "ok": True})
-                continue
-
-            # ── get_reply_log ─────────────────────────────────────────────────
-            if tool_name == "get_reply_log":
-                last_run = mem.get_last_outreach_run()
-                if last_run and last_run.get("phase2"):
-                    ids = last_run["phase2"].get("performer_ids_contacted", [])
-                    result = {"performer_ids": ids, "count": len(ids)}
-                else:
-                    result = {"performer_ids": [], "count": 0,
-                              "note": "No previous outreach run found."}
-                tool_results.append({
-                    "type":        "tool_result",
-                    "tool_use_id": block.id,
-                    "content":     json.dumps(result),
-                })
-                on_event({"type": "tool_result", "tool": tool_name,
-                          "result": f"{result['count']} performers from last run", "ok": True})
-                continue
-
-            # ── Standard dispatch ─────────────────────────────────────────────
-            interject = check_pause()
-            if interject:
-                messages.append({"role": "user", "content": (
-                    f"[User note]: {interject}\nPlease take this into account."
-                )})
-                on_event({"type": "thinking"})
-                break
-
-            result = _dispatch(tool_name, tool_input)
-            ok = "error" not in result
-            tool_results.append({
-                "type":        "tool_result",
-                "tool_use_id": block.id,
-                "content":     json.dumps(result),
-            })
-            on_event({
-                "type":   "tool_result",
-                "tool":   tool_name,
-                "result": str(result)[:300],
-                "ok":     ok,
-            })
-
-        if tool_results:
-            messages.append({"role": "user", "content": tool_results})
-
-    return ""
+    return AgentSpec(
+        name="Varekai",
+        system_prompt=SYSTEM_PROMPT,
+        tools=TOOLS,
+        tool_functions=TOOL_FUNCTIONS,
+        tool_phase_map=TOOL_PHASE_MAP,
+        blocking_tools={
+            "propose_outreach_queue": h_propose_queue,
+            "propose_reply_logging":  h_propose_reply_logging,
+        },
+    )
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
@@ -394,32 +251,21 @@ def run_with_callbacks(
     run_mode: str = "full",
     on_event=None,
     check_pause=None,
-    get_eligibility_decisions=None,
-    get_reply_decisions=None,
-    get_user_input=None,
+    decide=None,
     context: list[str] | None = None,
 ) -> str:
+    """Host entry point — streams events via on_event; decisions via decide(kind, payload)."""
     on_event = on_event or (lambda e: None)
-    check_pause = check_pause or (lambda: None)
-    get_eligibility_decisions = get_eligibility_decisions or (lambda p: {"confirmed_ids": [x.get("id") for x in p]})
-    get_reply_decisions = get_reply_decisions or (lambda p: [])
-    get_user_input = get_user_input or (lambda: "")
 
     run_id = mem.create_outreach_run(run_mode)
+    on_event({"type": "run_id", "run_id": run_id})
     on_event({"type": "phase", "phase": 1, "label": "Eligibility Audit"})
 
+    ctx = AgentContext(on_event=on_event, check_pause=check_pause, decide=decide)
+    messages = [{"role": "user", "content": phase_prompt(run_mode, context)}]
+
     try:
-        messages = [{"role": "user", "content": phase_prompt(run_mode, context)}]
-        result = _loop(
-            messages=messages,
-            run_id=run_id,
-            on_event=on_event,
-            check_pause=check_pause,
-            get_eligibility_decisions=get_eligibility_decisions,
-            get_reply_decisions=get_reply_decisions,
-            get_user_input=get_user_input,
-            context=context,
-        )
+        result = run_loop(_make_spec(run_id), messages, ctx)
         mem.complete_outreach_run(run_id)
         return result
     except Exception as exc:

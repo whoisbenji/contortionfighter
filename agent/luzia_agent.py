@@ -4,13 +4,8 @@ four-phase performance review workflow.
 """
 
 from __future__ import annotations
-import json
-import os
-import time
-from typing import Any
 
-import anthropic
-
+from .agent_runtime import AgentContext, AgentSpec, run_loop
 from .luzia_prompts import SYSTEM_PROMPT, phase_prompt, replay_prompt
 from .tools import (
     web_search,
@@ -29,9 +24,6 @@ from .tools import (
 )
 from .compositor import check_performer_photos
 from . import memory as mem
-
-MODEL = "claude-sonnet-4-6"
-MAX_TOKENS = 8192
 
 # ── Tool schema definitions passed to the API ────────────────────────────────
 
@@ -353,65 +345,6 @@ TOOL_FUNCTIONS = {
 }
 
 
-def _dispatch(tool_name: str, tool_input: dict) -> Any:
-    fn = TOOL_FUNCTIONS.get(tool_name)
-    if fn is None:
-        return {"error": f"Unknown tool: {tool_name}"}
-    try:
-        return fn(**tool_input)
-    except Exception as exc:
-        return {"error": str(exc)}
-
-
-def _create_message_with_retry(client, **kwargs):
-    """Call client.messages.create with exponential backoff on rate-limit errors."""
-    delays = [10, 30, 60, 120]
-    for attempt, delay in enumerate(delays + [None]):
-        try:
-            return client.messages.create(**kwargs)
-        except anthropic.RateLimitError:
-            if delay is None:
-                raise
-            time.sleep(delay)
-        except anthropic.APIStatusError as exc:
-            if exc.status_code == 429 and delay is not None:
-                time.sleep(delay)
-            else:
-                raise
-
-
-def _stream_response(client, on_event, **kwargs):
-    """Stream a response, emitting thinking_delta events for text tokens."""
-    delays = [10, 30, 60, 120]
-    for attempt, delay in enumerate(delays + [None]):
-        try:
-            thinking_id = f"thinking-{int(time.time()*1000)}"
-            text_buf = []
-            with client.messages.stream(**kwargs) as stream:
-                for event in stream:
-                    if (
-                        event.type == "content_block_delta"
-                        and hasattr(event, "delta")
-                        and getattr(event.delta, "type", "") == "text_delta"
-                    ):
-                        chunk = event.delta.text
-                        if chunk:
-                            text_buf.append(chunk)
-                            on_event({"type": "thinking_delta", "id": thinking_id, "text": chunk})
-            if text_buf:
-                on_event({"type": "thinking_done", "id": thinking_id})
-            return stream.get_final_message()
-        except anthropic.RateLimitError:
-            if delay is None:
-                raise
-            time.sleep(delay)
-        except anthropic.APIStatusError as exc:
-            if exc.status_code == 429 and delay is not None:
-                time.sleep(delay)
-            else:
-                raise
-
-
 # ── Phase detection ───────────────────────────────────────────────────────────
 
 TOOL_PHASE_MAP = {
@@ -432,13 +365,6 @@ TOOL_PHASE_MAP = {
     "webflow_find_performers":         (5, "Publishing to Webflow"),
     "webflow_create_blog_draft":       (5, "Publishing to Webflow"),
 }
-
-_NOOP_EVENT      = lambda event: None
-_NOOP_PAUSE      = lambda: None
-_NOOP_REVIEW     = lambda performers: {"decisions": [{"name": p["name"], "action": "skip"} for p in performers]}
-_NOOP_USER_INPUT = lambda: "no"
-_NOOP_PHOTO_URLS = lambda performers: {}  # proceed without collecting missing photos
-
 
 # ── Phase output extraction ───────────────────────────────────────────────────
 
@@ -473,249 +399,121 @@ def _extract_phase_output(tool_name: str, tool_input: dict, result: dict) -> tup
     return None
 
 
-# ── Core loop ─────────────────────────────────────────────────────────────────
+# ── Agent spec ────────────────────────────────────────────────────────────────
 
-def _loop(
-    month_label: str,
-    messages: list[dict],
-    on_event,
-    check_pause,
-    get_performer_review,
-    get_user_input,
-    get_photo_urls,
-    run_id: str,
-    verbose: bool,
-    tools_override: list[dict] | None = None,
-) -> str:
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    active_tools = tools_override if tools_override is not None else TOOLS
-    current_phase = 0
-    # Accumulate matching data across tool calls for phase 2 save
-    _matched_ids: list[str] = []
-    _matched_names: list[str] = []
-    _show_ids: list[str] = []
+def _make_spec(run_id: str | None) -> AgentSpec:
+    matched_names: list[str] = []
 
-    while True:
-        on_event({"type": "thinking"})
+    def h_ask_existing(tool_input: dict, ctx: AgentContext) -> dict:
+        past_runs = [
+            {
+                "run_id":      r["id"],
+                "month_label": r.get("month_label", ""),
+                "created_at":  r.get("created_at", "")[:10],
+                "notion_url":  r.get("research", {}).get("notion_url", "") if r.get("research") else "",
+            }
+            for r in mem.load_all_runs()
+            if r.get("research") and r.get("status") == "completed"
+        ]
+        answer = ctx.decide("research_question", {"past_runs": past_runs})
+        return {"answer": answer, "past_runs": past_runs}
 
-        response = _stream_response(
-            client,
-            on_event,
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=SYSTEM_PROMPT,
-            tools=active_tools,
-            messages=messages,
-        )
+    def h_performer_review(tool_input: dict, ctx: AgentContext) -> dict:
+        performers = tool_input.get("unmatched_performers", [])
+        return ctx.decide("performer_review", {"performers": performers})
 
-        messages.append({"role": "assistant", "content": response.content})
+    def h_list_review(tool_input: dict, ctx: AgentContext) -> dict:
+        performers = tool_input.get("matched_performers", [])
+        response = ctx.decide("performer_list_review", {"performers": performers})
+        return {"user_response": response or "ok"}
 
-        if response.stop_reason == "end_turn":
-            final_text = "".join(
-                block.text for block in response.content if hasattr(block, "text")
-            )
-            on_event({"type": "summary", "text": final_text})
-            if verbose:
-                print("\n✅ Agent complete.\n")
-                print(final_text)
-            return final_text
+    def pre_tool(tool_name: str, tool_input: dict, ctx: AgentContext) -> None:
+        # Photo check before image generation — collect missing photo URLs
+        if tool_name != "generate_images":
+            return
+        performers = check_performer_photos(tool_input.get("performer_page_ids", []))
+        missing_count = sum(1 for p in performers if not p["has_photo"])
+        photo_urls = ctx.decide("photo_check", {
+            "performers": performers, "missing_count": missing_count,
+        })
+        for pid, url in (photo_urls or {}).items():
+            if url and url.strip():
+                try:
+                    set_performer_photo(pid, url.strip())
+                    ctx.on_event({"type": "tool_result", "tool": "set_performer_photo",
+                                  "result": f"Photo saved for {pid}", "ok": True})
+                except Exception as exc:
+                    ctx.on_event({"type": "tool_result", "tool": "set_performer_photo",
+                                  "result": f"Failed to save photo: {exc}", "ok": False})
 
-        if response.stop_reason != "tool_use":
-            break
+    def after_tool(tool_name: str, tool_input: dict, result: dict, ctx: AgentContext):
+        phase_out = _extract_phase_output(tool_name, tool_input, result)
+        if phase_out and run_id:
+            phase_num, phase_data = phase_out
+            mem.save_phase(run_id, phase_num, phase_data)
+            ctx.on_event({"type": "phase_saved", "phase": phase_num})
 
-        tool_results = []
-        for block in response.content:
-            if block.type != "tool_use":
-                continue
-
-            tool_name  = block.name
-            tool_input = block.input
-
-            phase_num, phase_label = TOOL_PHASE_MAP.get(tool_name, (current_phase, "Working"))
-            if phase_num != current_phase:
-                current_phase = phase_num
-                on_event({"type": "phase", "phase": phase_num, "label": phase_label})
-
-            on_event({
-                "type":  "tool_call",
-                "tool":  tool_name,
-                "input": {k: (v[:200] + "…" if isinstance(v, str) and len(v) > 200 else v)
-                          for k, v in tool_input.items()},
+        if tool_name == "notion_create_performer" and "error" not in result:
+            matched_names.append(result.get("name", ""))
+        if tool_name == "notion_create_article_page" and "error" not in result and run_id:
+            mem.save_phase(run_id, 2, {
+                "performer_page_ids": tool_input.get("performer_page_ids", []),
+                "show_page_ids":      tool_input.get("show_page_ids", []),
+                "performer_names":    matched_names,
             })
+        return None
 
-            if verbose:
-                print(f"\n🔧 {tool_name}: {json.dumps(tool_input)[:200]}")
+    return AgentSpec(
+        name="Luzia",
+        system_prompt=SYSTEM_PROMPT,
+        tools=TOOLS,
+        tool_functions=TOOL_FUNCTIONS,
+        tool_phase_map=TOOL_PHASE_MAP,
+        blocking_tools={
+            "ask_about_existing_research": h_ask_existing,
+            "request_performer_review":    h_performer_review,
+            "review_matched_performers":   h_list_review,
+        },
+        pre_tool=pre_tool,
+        after_tool=after_tool,
+    )
 
-            # ── Ask about existing research: block for user input ─────────
-            if tool_name == "ask_about_existing_research":
-                past_runs = [
-                    {
-                        "run_id":      r["id"],
-                        "month_label": r.get("month_label", ""),
-                        "created_at":  r.get("created_at", "")[:10],
-                        "notion_url":  r.get("research", {}).get("notion_url", "") if r.get("research") else "",
-                    }
-                    for r in mem.load_all_runs()
-                    if r.get("research") and r.get("status") == "completed"
-                ]
-                on_event({"type": "research_question", "past_runs": past_runs})
-                user_answer = get_user_input()
-                result = {"answer": user_answer, "past_runs": past_runs}
-                tool_results.append({
-                    "type":        "tool_result",
-                    "tool_use_id": block.id,
-                    "content":     json.dumps(result),
-                })
-                on_event({
-                    "type":   "tool_result",
-                    "tool":   tool_name,
-                    "result": f"User answered: {user_answer[:200]}",
-                    "ok":     True,
-                })
-                continue
 
-            # ── Matched performer list review: block for user input ──────
-            if tool_name == "review_matched_performers":
-                performers = tool_input.get("matched_performers", [])
-                on_event({"type": "performer_list_review", "performers": performers})
-                user_response = get_user_input()
-                result = {"user_response": user_response or "ok"}
-                tool_results.append({
-                    "type":        "tool_result",
-                    "tool_use_id": block.id,
-                    "content":     json.dumps(result),
-                })
-                on_event({
-                    "type":   "tool_result",
-                    "tool":   tool_name,
-                    "result": f"User responded: {(user_response or 'ok')[:200]}",
-                    "ok":     True,
-                })
-                continue
+# Earliest phase each tool belongs to — used to restrict tools on replay.
+PHASE_TOOL_MIN = {
+    "load_outreach_replies":           1,
+    "ask_about_existing_research":     1,
+    "load_existing_research":          1,
+    "web_search":                      1,
+    "notion_create_research_page":     1,
+    "notion_list_performers_in_icpdb": 2,
+    "notion_search_performer":         2,
+    "request_performer_review":        2,
+    "review_matched_performers":       2,
+    "notion_create_performer":         2,
+    "notion_list_shows":               2,
+    "notion_search_show":              2,
+    "generate_images":                 3,
+    "notion_create_article_page":      4,
+    "webflow_find_performers":         5,
+    "webflow_create_blog_draft":       5,
+}
 
-            # ── Performer review: block until user responds ───────────────
-            if tool_name == "request_performer_review":
-                performers = tool_input.get("unmatched_performers", [])
-                on_event({"type": "performer_review", "performers": performers})
-                result = get_performer_review(performers)
-                tool_results.append({
-                    "type":        "tool_result",
-                    "tool_use_id": block.id,
-                    "content":     json.dumps(result),
-                })
-                on_event({
-                    "type":   "tool_result",
-                    "tool":   tool_name,
-                    "result": json.dumps(result)[:500],
-                    "ok":     True,
-                })
-                continue
-
-            # ── Photo check before image generation ──────────────────────
-            if tool_name == "generate_images":
-                performer_ids = tool_input.get("performer_page_ids", [])
-                performers = check_performer_photos(performer_ids)
-                missing_count = sum(1 for p in performers if not p["has_photo"])
-                on_event({
-                    "type":          "photo_check",
-                    "performers":    performers,
-                    "missing_count": missing_count,
-                })
-                photo_urls = get_photo_urls(performers)
-                # Write provided URLs back to Notion
-                for pid, url in (photo_urls or {}).items():
-                    if url and url.strip():
-                        try:
-                            set_performer_photo(pid, url.strip())
-                            on_event({"type": "tool_result", "tool": "set_performer_photo",
-                                      "result": f"Photo saved for {pid}", "ok": True})
-                        except Exception as exc:
-                            on_event({"type": "tool_result", "tool": "set_performer_photo",
-                                      "result": f"Failed to save photo: {exc}", "ok": False})
-
-            # ── Pause / interject check ───────────────────────────────────
-            interject = check_pause()
-            if interject:
-                messages.append({"role": "user", "content": (
-                    f"[User interjection]: {interject}\n"
-                    "Please take this into account and adjust your next action accordingly."
-                )})
-                on_event({"type": "thinking"})
-                rethink = _stream_response(
-                    client,
-                    on_event,
-                    model=MODEL,
-                    max_tokens=MAX_TOKENS,
-                    system=SYSTEM_PROMPT,
-                    tools=active_tools,
-                    messages=messages,
-                )
-                messages.append({"role": "assistant", "content": rethink.content})
-                if rethink.stop_reason == "end_turn":
-                    final_text = "".join(
-                        b.text for b in rethink.content if hasattr(b, "text")
-                    )
-                    on_event({"type": "summary", "text": final_text})
-                    return final_text
-                break
-
-            result = _dispatch(tool_name, tool_input)
-
-            # ── Persist phase outputs ─────────────────────────────────────
-            phase_out = _extract_phase_output(tool_name, tool_input, result)
-            if phase_out and run_id:
-                phase_num_out, phase_data = phase_out
-                mem.save_phase(run_id, phase_num_out, phase_data)
-                on_event({"type": "phase_saved", "phase": phase_num_out})
-
-            # Accumulate performer/show IDs for phase 2 save
-            if tool_name == "notion_create_performer" and "error" not in result:
-                _matched_ids.append(result.get("page_id", ""))
-                _matched_names.append(result.get("name", ""))
-            if tool_name == "notion_create_article_page" and "error" not in result:
-                # Save phase 2 matching data using what we accumulated + what the call had
-                p_ids = tool_input.get("performer_page_ids", [])
-                s_ids = tool_input.get("show_page_ids", [])
-                if run_id:
-                    mem.save_phase(run_id, 2, {
-                        "performer_page_ids": p_ids,
-                        "show_page_ids":      s_ids,
-                        "performer_names":    _matched_names,
-                    })
-
-            result_preview = json.dumps(result, ensure_ascii=False)
-            on_event({
-                "type":   "tool_result",
-                "tool":   tool_name,
-                "result": result_preview[:500] + ("…" if len(result_preview) > 500 else ""),
-                "ok":     "error" not in result,
-            })
-
-            if verbose:
-                print(f"   → {result_preview[:300]}")
-
-            tool_results.append({
-                "type":        "tool_result",
-                "tool_use_id": block.id,
-                "content":     json.dumps(result),
-            })
-
-        if tool_results:
-            messages.append({"role": "user", "content": tool_results})
-
-    return "Agent loop ended unexpectedly."
+_PHASE_LABELS = {1: "Research", 2: "Performer Matching", 3: "Image Generation",
+                 4: "Writing Article", 5: "Publishing to Webflow"}
 
 
 # ── Public entry points ───────────────────────────────────────────────────────
 
 def run(month_label: str, verbose: bool = True) -> str:
-    """CLI entry point."""
+    """CLI entry point — headless, conservative decisions."""
     run_id = mem.create_run(month_label)
     messages = [{"role": "user", "content": phase_prompt(month_label)}]
     if verbose:
         print(f"\n🤸 Starting performance review agent for {month_label}\n{'─'*60}")
+    ctx = AgentContext(on_event=lambda e: None)
     try:
-        result = _loop(month_label, messages, _NOOP_EVENT, _NOOP_PAUSE, _NOOP_REVIEW, _NOOP_USER_INPUT, _NOOP_PHOTO_URLS, run_id, verbose)
+        result = run_loop(_make_spec(run_id), messages, ctx, verbose=verbose)
         mem.complete_run(run_id)
         return result
     except Exception as exc:
@@ -726,15 +524,13 @@ def run(month_label: str, verbose: bool = True) -> str:
 def run_with_callbacks(
     month_label: str,
     on_event,
-    check_pause,
-    get_performer_review,
-    get_user_input=None,
-    get_photo_urls=None,
+    check_pause=None,
+    decide=None,
     run_id: str | None = None,
     replay_from: int = 1,
     cached_run: dict | None = None,
 ) -> str:
-    """Dashboard entry point — streams events via callbacks."""
+    """Host entry point — streams events via on_event; decisions via decide(kind, payload)."""
     if run_id is None:
         run_id = mem.create_run(month_label)
 
@@ -747,48 +543,18 @@ def run_with_callbacks(
 
     messages = [{"role": "user", "content": user_msg}]
 
-    # When replaying, restrict available tools to only phases >= replay_from
-    # so the model can't accidentally re-run earlier phases
-    phase_tool_min = {
-        "load_outreach_replies":        1,
-        "ask_about_existing_research": 1,
-        "load_existing_research":      1,
-        "web_search": 1,
-        "notion_create_research_page": 1,
-        "notion_list_performers_in_icpdb": 2,
-        "notion_search_performer": 2,
-        "request_performer_review": 2,
-        "review_matched_performers": 2,
-        "notion_create_performer": 2,
-        "notion_list_shows": 2,
-        "notion_search_show": 2,
-        "generate_images": 3,
-        "notion_create_article_page": 4,
-        "webflow_find_performers": 5,
-        "webflow_create_blog_draft": 5,
-    }
-    active_tools = [t for t in TOOLS if phase_tool_min.get(t["name"], 1) >= replay_from]
+    # When replaying, restrict available tools to phases >= replay_from
+    # so the model can't accidentally re-run earlier phases.
+    active_tools = [t for t in TOOLS if PHASE_TOOL_MIN.get(t["name"], 1) >= replay_from]
 
     start_phase = max(1, replay_from)
     on_event({"type": "phase", "phase": start_phase,
-              "label": {1:"Research",2:"Performer Matching",3:"Image Generation",
-                        4:"Writing Article",5:"Publishing to Webflow"}.get(start_phase,"Working")})
+              "label": _PHASE_LABELS.get(start_phase, "Working")})
 
-    _get_user_input  = get_user_input  if get_user_input  is not None else _NOOP_USER_INPUT
-    _get_photo_urls  = get_photo_urls  if get_photo_urls  is not None else _NOOP_PHOTO_URLS
-
-    # ask_about_existing_research is only meaningful for a fresh run (not replay)
-    active_tools_with_ask = active_tools
-    if replay_from <= 1:
-        ask_tools = [t for t in TOOLS if t["name"] in ("ask_about_existing_research", "load_existing_research")]
-        existing_names = {t["name"] for t in active_tools}
-        active_tools_with_ask = ask_tools + [t for t in active_tools if t["name"] not in {at["name"] for at in ask_tools}]
-    else:
-        active_tools_with_ask = active_tools
+    ctx = AgentContext(on_event=on_event, check_pause=check_pause, decide=decide)
 
     try:
-        result = _loop(month_label, messages, on_event, check_pause, get_performer_review,
-                       _get_user_input, _get_photo_urls, run_id, verbose=False, tools_override=active_tools_with_ask)
+        result = run_loop(_make_spec(run_id), messages, ctx, tools_override=active_tools)
         mem.complete_run(run_id)
         on_event({"type": "history_updated"})
         return result

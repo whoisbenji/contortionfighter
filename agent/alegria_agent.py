@@ -18,8 +18,8 @@ import anthropic
 
 from .tools import web_search, notion_search_performer, notion_search_pages, notion_fetch_page
 from . import memory as mem
+from .config import MODEL
 
-MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 4096
 
 _BASE_SYSTEM_PROMPT = """\
@@ -448,350 +448,81 @@ def _build_system_prompt() -> str:
     return "\n\n".join(sections)
 
 
-def _run_luzia_inline(inp: dict, on_event, get_user_message) -> dict:
-    """Run Luzia inline, proxying its events and decisions through Alegría's chat."""
-    import re as _re
-    from . import luzia_agent
+def _run_subagent_inline(agent_key: str, inp: dict, on_event, get_user_message) -> dict:
+    """Run a specialist agent inline, proxying its events and decisions through chat.
 
-    month_label   = inp.get("month_label", "")
-    replay_from   = int(inp.get("replay_from", 1))
-    replay_run_id = inp.get("replay_run_id")
-    cached_run    = mem.get_run(replay_run_id) if replay_run_id else None
+    All blocking decisions arrive via the agent's decide(kind, payload) channel
+    and are rendered/parsed by the shared chat handlers in decisions.py.
+    """
+    from .decisions import chat_decision
 
-    def sub_on_event(event):
-        t = event.get("type", "")
-        # Forward phase changes and summaries as chat messages
-        if t == "phase":
-            on_event({"type": "alegria_message",
-                      "text": f"**Luzia — Phase {event.get('phase')}: {event.get('label', '')}**"})
-        elif t == "summary":
-            on_event({"type": "alegria_message", "text": event.get("text", "")})
-        elif t == "error":
-            on_event({"type": "alegria_message",
-                      "text": f"⚠ Luzia error: {event.get('message', '')}"})
-        # Forward tool_call / tool_result for live progress (no bubble spam — just the agent event)
-        elif t == "research_question":
-            past_runs = event.get("past_runs", [])
-            if past_runs:
-                options = "\n".join(
-                    f"- **{r['month_label']}** ({r['created_at'][:10]})"
-                    for r in past_runs[:5]
-                )
-                on_event({"type": "alegria_message",
-                          "text": (
-                              "**Luzia:** Should I reuse existing research or run a fresh search?\n\n"
-                              f"Available past research:\n{options}\n\n"
-                              "Reply with a month label to reuse it, or **fresh** to research from scratch."
-                          )})
-            else:
-                on_event({"type": "alegria_message",
-                          "text": "**Luzia:** No past research found — starting fresh."})
-        elif t in ("tool_call", "tool_result", "thinking", "thinking_delta",
-                   "thinking_done", "phase_saved", "run_id", "injected",
-                   "performer_review"):
-            pass  # consumed internally or surfaced via get_user callbacks
-        else:
-            # Pass other events through (images, webflow links, etc.)
-            on_event(event)
+    label = {"luzia": "Luzia", "kooza": "Kooza", "varekai": "Varekai"}[agent_key]
 
-    def sub_check_pause():
-        return None
+    def say(text: str) -> None:
+        on_event({"type": "alegria_message", "text": text})
 
-    def sub_get_performer_review(performers):
-        if not performers:
-            return {"decisions": []}
-        lines = [
-            f"**Luzia found {len(performers)} unmatched performer(s).** "
-            "Reply **all** to include everyone, or type the numbers to **skip** (e.g. `2, 4`):",
-            "",
-        ]
-        for i, p in enumerate(performers, 1):
-            detail = " — ".join(filter(None, [p.get("show"), p.get("company"), p.get("country")]))
-            lines.append(f"{i}. **{p.get('name', '?')}**{(' — ' + detail) if detail else ''}")
-        on_event({"type": "alegria_message", "text": "\n".join(lines)})
-        on_event({"type": "alegria_waiting"})
-
-        user_resp = get_user_message() or ""
-        lower = user_resp.strip().lower()
-        if not lower or lower in ("all", "yes", "all of them", "include all", "include everyone"):
-            return {"decisions": [{"name": p["name"], "action": "add"} for p in performers]}
-
-        skip_nums = {int(n) for n in _re.findall(r'\d+', user_resp)}
-        return {"decisions": [
-            {"name": p["name"], "action": "skip" if (i in skip_nums) else "add"}
-            for i, p in enumerate(performers, 1)
-        ]}
-
-    def sub_get_user_input():
+    def ask() -> str:
         on_event({"type": "alegria_waiting"})
         return get_user_message() or ""
 
-    def sub_get_photo_urls(performers):
-        missing = [p for p in performers if not p.get("has_photo")]
-        if not missing:
-            return {}
-        lines = [
-            f"**Luzia photo check:** {len(performers)} performer(s) attached · "
-            f"**{len(missing)} missing a Main photo.**",
-            "Paste an image URL next to each name, or reply **skip** to proceed without them:",
-            "",
-        ]
-        for i, p in enumerate(missing, 1):
-            lines.append(f"{i}. **{p.get('name', '?')}**")
-        on_event({"type": "alegria_message", "text": "\n".join(lines)})
-        on_event({"type": "alegria_waiting"})
-
-        user_resp = get_user_message() or ""
-        if user_resp.strip().lower() in ("skip", "none", ""):
-            return {}
-
-        # Accept "N: url" lines or one URL per line matched to missing in order
-        urls: dict[str, str] = {}
-        for line in user_resp.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            # "2: https://..." or "2. https://..."
-            m = _re.match(r'^(\d+)[.:]\s*(https?://\S+)', line)
-            if m:
-                idx = int(m.group(1)) - 1
-                if 0 <= idx < len(missing):
-                    urls[missing[idx]["page_id"]] = m.group(2)
-            elif line.startswith("http"):
-                # Bare URL — match to next unassigned missing performer
-                for p in missing:
-                    if p["page_id"] not in urls:
-                        urls[p["page_id"]] = line
-                        break
-        return urls
-
-    try:
-        luzia_agent.run_with_callbacks(
-            month_label=month_label,
-            on_event=sub_on_event,
-            check_pause=sub_check_pause,
-            get_performer_review=sub_get_performer_review,
-            get_user_input=sub_get_user_input,
-            get_photo_urls=sub_get_photo_urls,
-            run_id=None,
-            replay_from=replay_from,
-            cached_run=cached_run,
-        )
-        return {"status": "completed", "month": month_label}
-    except Exception as exc:
-        return {"status": "error", "error": str(exc)}
-
-
-def _run_kooza_inline(inp: dict, on_event, get_user_message) -> dict:
-    """Run Kooza inline, proxying its events and decisions through Alegría's chat."""
-    import re as _re
-    from . import kooza_agent
-
-    run_mode = inp.get("run_mode", "full")
-    prefs    = mem.get_icpdb_prefs()
+    def decide(kind: str, payload: dict):
+        return chat_decision(kind, payload, say, ask)
 
     def sub_on_event(event):
         t = event.get("type", "")
         if t == "phase":
-            on_event({"type": "alegria_message",
-                      "text": f"**Kooza — Phase {event.get('phase')}: {event.get('label', '')}**"})
+            say(f"**{label} — Phase {event.get('phase')}: {event.get('label', '')}**")
         elif t == "summary":
-            on_event({"type": "alegria_message", "text": event.get("text", "")})
+            say(event.get("text", ""))
         elif t == "error":
-            on_event({"type": "alegria_message",
-                      "text": f"⚠ Kooza error: {event.get('message', '')}"})
+            say(f"⚠ {label} error: {event.get('message', '')}")
         elif t in ("tool_call", "tool_result", "thinking", "thinking_delta",
-                   "thinking_done", "phase_saved", "run_id",
-                   "update_proposals", "duplicate_proposals"):
-            pass
+                   "thinking_done", "phase_saved", "run_id", "injected",
+                   "audit_metrics", "history_updated"):
+            pass  # internal progress noise — not useful as chat bubbles
         else:
+            # Pass other events through (images, webflow links, outreach drafts, etc.)
             on_event(event)
 
-    def sub_check_pause():
-        return None
-
-    def sub_get_update_decisions(proposals):
-        if not proposals:
-            return {"decisions": []}
-        # Detect whether these are update proposals or dedup groups
-        is_dedup = bool(proposals and proposals[0].get("secondary_id"))
-
-        if is_dedup:
-            lines = [
-                f"**Kooza found {len(proposals)} possible duplicate(s).** "
-                "Reply **all** to approve merging all, type numbers to approve specific ones, "
-                "or **none** to skip all:",
-                "",
-            ]
-            for i, g in enumerate(proposals, 1):
-                lines.append(
-                    f"{i}. **{g.get('primary_name', g.get('primary_id', '?'))}** ← keep "
-                    f"(merge with **{g.get('secondary_name', g.get('secondary_id', '?'))}**)"
-                )
-            on_event({"type": "alegria_message", "text": "\n".join(lines)})
-            on_event({"type": "alegria_waiting"})
-
-            user_resp = get_user_message() or ""
-            lower = user_resp.strip().lower()
-            if lower in ("none", "skip", "no", "skip all"):
-                return {"decisions": [
-                    {"primary_id": g["primary_id"], "secondary_id": g["secondary_id"], "approved": False}
-                    for g in proposals
-                ]}
-            if not lower or lower in ("all", "yes", "approve all", "merge all"):
-                return {"decisions": [
-                    {"primary_id": g["primary_id"], "secondary_id": g["secondary_id"], "approved": True}
-                    for g in proposals
-                ]}
-            approve_nums = {int(n) for n in _re.findall(r'\d+', user_resp)}
-            return {"decisions": [
-                {"primary_id": g["primary_id"], "secondary_id": g["secondary_id"],
-                 "approved": (i in approve_nums)}
-                for i, g in enumerate(proposals, 1)
-            ]}
-        else:
-            lines = [
-                f"**Kooza proposes {len(proposals)} update(s).** "
-                "Reply **all** to approve all, type numbers to approve specific ones, "
-                "or **none** to reject all:",
-                "",
-            ]
-            for i, p in enumerate(proposals, 1):
-                lines.append(
-                    f"{i}. **{p.get('performer_name', p.get('performer_id', '?'))}** — "
-                    f"{p.get('field', '?')}: `{p.get('proposed_value', '?')}`"
-                )
-            on_event({"type": "alegria_message", "text": "\n".join(lines)})
-            on_event({"type": "alegria_waiting"})
-
-            user_resp = get_user_message() or ""
-            lower = user_resp.strip().lower()
-            if lower in ("none", "skip", "no", "reject all"):
-                return {"decisions": [
-                    {"performer_id": p["performer_id"], "approved": False}
-                    for p in proposals
-                ]}
-            if not lower or lower in ("all", "yes", "approve all"):
-                return {"decisions": [
-                    {"performer_id": p["performer_id"], "approved": True}
-                    for p in proposals
-                ]}
-            approve_nums = {int(n) for n in _re.findall(r'\d+', user_resp)}
-            return {"decisions": [
-                {"performer_id": p["performer_id"], "approved": (i in approve_nums)}
-                for i, p in enumerate(proposals, 1)
-            ]}
-
     try:
-        kooza_agent.run_with_callbacks(
-            on_event=sub_on_event,
-            check_pause=sub_check_pause,
-            get_update_decisions=sub_get_update_decisions,
-            run_mode=run_mode,
-            prefs=prefs,
-        )
-        return {"status": "completed", "run_mode": run_mode}
-    except Exception as exc:
-        return {"status": "error", "error": str(exc)}
+        if agent_key == "luzia":
+            from . import luzia_agent
+            month_label   = inp.get("month_label", "")
+            replay_from   = int(inp.get("replay_from", 1))
+            replay_run_id = inp.get("replay_run_id")
+            cached_run    = mem.get_run(replay_run_id) if replay_run_id else None
+            luzia_agent.run_with_callbacks(
+                month_label=month_label,
+                on_event=sub_on_event,
+                decide=decide,
+                replay_from=replay_from,
+                cached_run=cached_run,
+            )
+            return {"status": "completed", "month": month_label}
 
+        if agent_key == "kooza":
+            from . import kooza_agent
+            run_mode = inp.get("run_mode", "full")
+            kooza_agent.run_with_callbacks(
+                on_event=sub_on_event,
+                decide=decide,
+                run_mode=run_mode,
+                prefs=mem.get_icpdb_prefs(),
+            )
+            return {"status": "completed", "run_mode": run_mode}
 
-def _run_varekai_inline(inp: dict, on_event, get_user_message) -> dict:
-    """Run Varekai inline, proxying its events and decisions through Alegría's chat."""
-    from . import varekai_agent
+        if agent_key == "varekai":
+            from . import varekai_agent
+            run_mode = inp.get("run_mode", "full")
+            varekai_agent.run_with_callbacks(
+                run_mode=run_mode,
+                on_event=sub_on_event,
+                decide=decide,
+                context=mem.load_alegria_memories(),
+            )
+            return {"status": "completed", "run_mode": run_mode}
 
-    run_mode = inp.get("run_mode", "full")
-    context = mem.load_alegria_memories()
-
-    def sub_on_event(event):
-        t = event.get("type", "")
-        if t == "phase":
-            on_event({"type": "alegria_message",
-                      "text": f"**Varekai — Phase {event.get('phase')}: {event.get('label', '')}**"})
-        elif t == "summary":
-            on_event({"type": "alegria_message", "text": event.get("text", "")})
-        elif t == "error":
-            on_event({"type": "alegria_message",
-                      "text": f"⚠ Varekai error: {event.get('message', '')}"})
-        elif t in ("tool_call", "tool_result", "thinking", "thinking_delta", "thinking_done"):
-            pass
-        else:
-            on_event(event)
-
-    def sub_check_pause():
-        return None
-
-    def sub_get_eligibility_decisions(performers):
-        if not performers:
-            return {"confirmed_ids": []}
-        lines = [
-            f"**Varekai — {len(performers)} performer(s) eligible for outreach.** "
-            "Reply **all** to include everyone, or type numbers to **exclude** (e.g. `2, 5`):",
-            "",
-        ]
-        for i, p in enumerate(performers, 1):
-            handle = f" (@{p.get('instagram')})" if p.get("instagram") else ""
-            lines.append(f"{i}. **{p.get('name', '?')}**{handle}")
-        on_event({"type": "alegria_message", "text": "\n".join(lines)})
-        on_event({"type": "alegria_waiting"})
-
-        import re as _re
-        user_resp = get_user_message() or ""
-        lower = user_resp.strip().lower()
-        if not lower or lower in ("all", "yes", "include all", "everyone"):
-            return {"confirmed_ids": [p.get("id") for p in performers if p.get("id")]}
-        exclude_nums = {int(n) for n in _re.findall(r'\d+', user_resp)}
-        return {"confirmed_ids": [
-            p.get("id") for i, p in enumerate(performers, 1)
-            if p.get("id") and i not in exclude_nums
-        ]}
-
-    def sub_get_reply_decisions(performers):
-        if not performers:
-            return []
-        lines = [
-            f"**Varekai — log replies for {len(performers)} performer(s).** "
-            "For each, paste their reply (or leave blank for No Response). "
-            "Format: `N: <reply text>` or just press enter to skip:",
-            "",
-        ]
-        for i, p in enumerate(performers, 1):
-            lines.append(f"{i}. **{p.get('name', '?')}** (@{p.get('instagram', '?')})")
-        on_event({"type": "alegria_message", "text": "\n".join(lines)})
-        on_event({"type": "alegria_waiting"})
-
-        import re as _re
-        user_resp = get_user_message() or ""
-        decisions = []
-        for i, p in enumerate(performers, 1):
-            m = _re.search(rf'^{i}[.:\)]\s*(.+)$', user_resp, _re.MULTILINE)
-            if m:
-                reply_text = m.group(1).strip()
-                decisions.append({
-                    "page_id": p.get("id", ""),
-                    "reply_text": reply_text,
-                    "status": "Replied",
-                    "upcoming_shows": reply_text,
-                })
-            else:
-                decisions.append({
-                    "page_id": p.get("id", ""),
-                    "reply_text": "",
-                    "status": "No Response",
-                    "upcoming_shows": "",
-                })
-        return decisions
-
-    try:
-        varekai_agent.run_with_callbacks(
-            run_mode=run_mode,
-            on_event=sub_on_event,
-            check_pause=sub_check_pause,
-            get_eligibility_decisions=sub_get_eligibility_decisions,
-            get_reply_decisions=sub_get_reply_decisions,
-            get_user_input=lambda: get_user_message() or "",
-            context=context,
-        )
-        return {"status": "completed", "run_mode": run_mode}
+        return {"status": "error", "error": f"Unknown agent: {agent_key}"}
     except Exception as exc:
         return {"status": "error", "error": str(exc)}
 
@@ -957,15 +688,15 @@ def run_with_callbacks(
             elif name == "run_luzia":
                 on_event({"type": "alegria_message",
                           "text": f"Starting Luzia for **{inp.get('month_label', '')}**…"})
-                result = _run_luzia_inline(inp, on_event, get_user_message)
+                result = _run_subagent_inline("luzia", inp, on_event, get_user_message)
             elif name == "run_kooza":
                 on_event({"type": "alegria_message",
                           "text": f"Starting Kooza in **{inp.get('run_mode', 'full')}** mode…"})
-                result = _run_kooza_inline(inp, on_event, get_user_message)
+                result = _run_subagent_inline("kooza", inp, on_event, get_user_message)
             elif name == "run_varekai":
                 on_event({"type": "alegria_message",
                           "text": f"Starting Varekai in **{inp.get('run_mode', 'full')}** mode…"})
-                result = _run_varekai_inline(inp, on_event, get_user_message)
+                result = _run_subagent_inline("varekai", inp, on_event, get_user_message)
             elif name == "suggest_agent":
                 on_event({
                     "type":   "agent_suggestion",

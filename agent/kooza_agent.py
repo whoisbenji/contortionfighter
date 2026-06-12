@@ -4,13 +4,8 @@ Structured like agent.py but drives the five-phase ICPDB workflow.
 """
 
 from __future__ import annotations
-import json
-import os
-import time
-from typing import Any
 
-import anthropic
-
+from .agent_runtime import AgentContext, AgentSpec, run_loop
 from .kooza_prompts import ICPDB_SYSTEM_PROMPT, audit_prompt
 from .kooza_tools import (
     icpdb_audit,
@@ -21,9 +16,6 @@ from .kooza_tools import (
     fetch_performer_fields,
 )
 from . import memory as mem
-
-MODEL = "claude-sonnet-4-6"
-MAX_TOKENS = 8192
 
 # ── Tool schema definitions ───────────────────────────────────────────────────
 
@@ -214,299 +206,99 @@ TOOL_PHASE_MAP = {
     "merge_performer_records":        (4, "Merge"),
 }
 
-_NOOP_EVENT   = lambda event: None
-_NOOP_PAUSE   = lambda: None
-_NOOP_DECISIONS = lambda proposals: {"decisions": [{"performer_id": p["performer_id"], "approved": False} for p in proposals]}
+# ── Agent spec ────────────────────────────────────────────────────────────────
 
+def _make_spec(run_id: str | None) -> AgentSpec:
+    counters = {"updated_fields_total": 0}
 
-def _dispatch(tool_name: str, tool_input: dict) -> Any:
-    fn = TOOL_FUNCTIONS.get(tool_name)
-    if fn is None:
-        return {"error": f"Unknown tool: {tool_name}"}
-    try:
-        return fn(**tool_input)
-    except Exception as exc:
-        return {"error": str(exc)}
+    def h_propose_updates(tool_input: dict, ctx: AgentContext) -> dict:
+        proposals = tool_input.get("proposals", [])
+        decisions = ctx.decide("update_proposals", {"proposals": proposals})
+        approved_count = sum(1 for d in decisions.get("decisions", []) if d.get("approved"))
+        if run_id:
+            mem.save_icpdb_phase(run_id, 3, {
+                "proposals_count": len(proposals),
+                "approved_count":  approved_count,
+            })
+            ctx.on_event({"type": "phase_saved", "phase": 3})
+        return decisions
 
+    def h_propose_dedups(tool_input: dict, ctx: AgentContext) -> dict:
+        groups = tool_input.get("groups", [])
+        # Enrich groups with full field data so the reviewer can compare records.
+        enriched = []
+        for g in groups:
+            eg = dict(g)
+            if g.get("primary_id"):
+                eg["primary_fields"] = fetch_performer_fields(g["primary_id"])
+            if g.get("secondary_id"):
+                eg["secondary_fields"] = fetch_performer_fields(g["secondary_id"])
+            enriched.append(eg)
+        return ctx.decide("duplicate_proposals", {"groups": enriched})
 
-def _create_message_with_retry(client, **kwargs):
-    """Call client.messages.create with exponential backoff on rate-limit errors."""
-    delays = [10, 30, 60, 120]
-    for attempt, delay in enumerate(delays + [None]):
-        try:
-            return client.messages.create(**kwargs)
-        except anthropic.RateLimitError:
-            if delay is None:
-                raise
-            time.sleep(delay)
-        except anthropic.APIStatusError as exc:
-            if exc.status_code == 429 and delay is not None:
-                time.sleep(delay)
-            else:
-                raise
+    def after_tool(tool_name: str, tool_input: dict, result: dict, ctx: AgentContext):
+        if tool_name == "icpdb_audit" and "error" not in result:
+            audit_data = {
+                "total":                           result.get("total", 0),
+                "health_score":                    result.get("health_score", 0),
+                "completeness":                    result.get("completeness", {}),
+                "performers_needing_update_count": len(result.get("performers_needing_update", [])),
+                "duplicates":                      result.get("duplicates", {}),
+            }
+            if run_id:
+                mem.save_icpdb_phase(run_id, 1, audit_data)
+                ctx.on_event({"type": "phase_saved", "phase": 1})
+            ctx.on_event({"type": "audit_metrics", **audit_data})
 
+            # Compact result for the model: the full performers_needing_update
+            # list can be 400+ items; send a count and top-10 sample instead.
+            # Duplicate groups stay intact so the model can analyse them.
+            pnu = result.get("performers_needing_update", [])
+            return {
+                **result,
+                "performers_needing_update_count": len(pnu),
+                "performers_needing_update":       pnu[:10],
+            }
 
-def _stream_response(client, on_event, **kwargs):
-    """Stream a response, emitting thinking_delta events for text tokens.
-
-    Returns the final Message object (same shape as messages.create()).
-    Falls back to non-streaming on rate-limit with exponential backoff.
-    """
-    delays = [10, 30, 60, 120]
-    for attempt, delay in enumerate(delays + [None]):
-        try:
-            thinking_id = f"thinking-{int(time.time()*1000)}"
-            text_buf = []
-            with client.messages.stream(**kwargs) as stream:
-                for event in stream:
-                    if (
-                        event.type == "content_block_delta"
-                        and hasattr(event, "delta")
-                        and getattr(event.delta, "type", "") == "text_delta"
-                    ):
-                        chunk = event.delta.text
-                        if chunk:
-                            text_buf.append(chunk)
-                            on_event({"type": "thinking_delta", "id": thinking_id, "text": chunk})
-            if text_buf:
-                on_event({"type": "thinking_done", "id": thinking_id})
-            return stream.get_final_message()
-        except anthropic.RateLimitError:
-            if delay is None:
-                raise
-            time.sleep(delay)
-        except anthropic.APIStatusError as exc:
-            if exc.status_code == 429 and delay is not None:
-                time.sleep(delay)
-            else:
-                raise
-
-
-# ── Core loop ─────────────────────────────────────────────────────────────────
-
-def _loop(
-    messages: list[dict],
-    on_event,
-    check_pause,
-    get_update_decisions,
-    run_id: str,
-    verbose: bool,
-    tools_override: list[dict] | None = None,
-) -> str:
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    active_tools = tools_override if tools_override is not None else ICPDB_TOOLS
-    current_phase = 0
-
-    # Accumulators for phase summaries
-    _updated_fields_total = 0
-
-    while True:
-        on_event({"type": "thinking"})
-
-        response = _stream_response(
-            client,
-            on_event,
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=ICPDB_SYSTEM_PROMPT,
-            tools=active_tools,
-            messages=messages,
-        )
-
-        messages.append({"role": "assistant", "content": response.content})
-
-        if response.stop_reason == "end_turn":
-            final_text = "".join(
-                block.text for block in response.content if hasattr(block, "text")
-            )
-            on_event({"type": "summary", "text": final_text})
-            if verbose:
-                print("\n✅ ICPDB Agent complete.\n")
-                print(final_text)
-            return final_text
-
-        if response.stop_reason != "tool_use":
-            break
-
-        tool_results = []
-        for block in response.content:
-            if block.type != "tool_use":
-                continue
-
-            tool_name  = block.name
-            tool_input = block.input
-
-            phase_num, phase_label = TOOL_PHASE_MAP.get(tool_name, (current_phase, "Working"))
-            if phase_num != current_phase:
-                current_phase = phase_num
-                on_event({"type": "phase", "phase": phase_num, "label": phase_label})
-
-            on_event({
-                "type":  "tool_call",
-                "tool":  tool_name,
-                "input": {k: (v[:200] + "…" if isinstance(v, str) and len(v) > 200 else v)
-                          for k, v in tool_input.items()},
+        if tool_name == "notion_update_performer" and "error" not in result and run_id:
+            counters["updated_fields_total"] += len(result.get("updated_fields", []))
+            mem.save_icpdb_phase(run_id, 4, {
+                "updated_fields_total": counters["updated_fields_total"],
             })
 
-            if verbose:
-                print(f"\n🔧 {tool_name}: {json.dumps(tool_input)[:200]}")
+        if tool_name == "draft_outreach_messages" and "error" not in result:
+            ctx.on_event({"type": "outreach_drafts", "drafts": result.get("drafts", [])})
+            if run_id:
+                mem.save_icpdb_phase(run_id, 5, {"drafts_count": result.get("count", 0)})
+                ctx.on_event({"type": "phase_saved", "phase": 5})
 
-            # ── propose_performer_updates: blocking review ────────────────
-            if tool_name == "propose_performer_updates":
-                proposals = tool_input.get("proposals", [])
-                on_event({"type": "update_proposals", "proposals": proposals})
-                decisions = get_update_decisions(proposals)
-                # Save phase 3 summary
-                approved_count = sum(1 for d in decisions.get("decisions", []) if d.get("approved"))
-                if run_id:
-                    mem.save_icpdb_phase(run_id, 3, {
-                        "proposals_count": len(proposals),
-                        "approved_count": approved_count,
-                    })
-                    on_event({"type": "phase_saved", "phase": 3})
-                result_str = json.dumps(decisions)
-                tool_results.append({
-                    "type":        "tool_result",
-                    "tool_use_id": block.id,
-                    "content":     result_str,
-                })
-                on_event({
-                    "type":   "tool_result",
-                    "tool":   tool_name,
-                    "result": result_str[:500],
-                    "ok":     True,
-                })
-                continue
+        return None
 
-            # ── propose_duplicate_resolutions: blocking review ────────────
-            if tool_name == "propose_duplicate_resolutions":
-                groups = tool_input.get("groups", [])
-                enriched = []
-                for g in groups:
-                    eg = dict(g)
-                    if g.get("primary_id"):
-                        eg["primary_fields"] = fetch_performer_fields(g["primary_id"])
-                    if g.get("secondary_id"):
-                        eg["secondary_fields"] = fetch_performer_fields(g["secondary_id"])
-                    enriched.append(eg)
-                on_event({"type": "duplicate_proposals", "groups": enriched})
-                decisions = get_update_decisions(groups)   # reuse the same queue
-                result_str = json.dumps(decisions)
-                tool_results.append({
-                    "type":        "tool_result",
-                    "tool_use_id": block.id,
-                    "content":     result_str,
-                })
-                on_event({
-                    "type":   "tool_result",
-                    "tool":   tool_name,
-                    "result": result_str[:500],
-                    "ok":     True,
-                })
-                continue
-
-            # ── Pause / interject check ───────────────────────────────────
-            interject = check_pause()
-            if interject:
-                messages.append({"role": "user", "content": (
-                    f"[User interjection]: {interject}\n"
-                    "Please take this into account and adjust your next action accordingly."
-                )})
-                on_event({"type": "thinking"})
-                rethink = _stream_response(
-                    client,
-                    on_event,
-                    model=MODEL,
-                    max_tokens=MAX_TOKENS,
-                    system=ICPDB_SYSTEM_PROMPT,
-                    tools=active_tools,
-                    messages=messages,
-                )
-                messages.append({"role": "assistant", "content": rethink.content})
-                if rethink.stop_reason == "end_turn":
-                    final_text = "".join(
-                        b.text for b in rethink.content if hasattr(b, "text")
-                    )
-                    on_event({"type": "summary", "text": final_text})
-                    return final_text
-                break
-
-            result = _dispatch(tool_name, tool_input)
-
-            # ── Persist phase outputs ─────────────────────────────────────
-            if tool_name == "icpdb_audit" and "error" not in result:
-                audit_data = {
-                    "total":                           result.get("total", 0),
-                    "health_score":                    result.get("health_score", 0),
-                    "completeness":                    result.get("completeness", {}),
-                    "performers_needing_update_count": len(result.get("performers_needing_update", [])),
-                    "duplicates":                      result.get("duplicates", {}),
-                }
-                if run_id:
-                    mem.save_icpdb_phase(run_id, 1, audit_data)
-                    on_event({"type": "phase_saved", "phase": 1})
-                on_event({"type": "audit_metrics", **audit_data})
-
-                # Build a compact result for the model: strip the full
-                # performers_needing_update list (can be 400+ items) and replace it
-                # with just a count and top-10 sample.  The duplicate groups must
-                # remain intact so the model can analyse them.
-                pnu = result.get("performers_needing_update", [])
-                result_for_model = {
-                    **result,
-                    "performers_needing_update_count": len(pnu),
-                    "performers_needing_update":       pnu[:10],  # top-10 sample only
-                }
-            else:
-                result_for_model = result
-
-            if tool_name == "notion_update_performer" and "error" not in result and run_id:
-                _updated_fields_total += len(result.get("updated_fields", []))
-
-            if tool_name == "draft_outreach_messages" and "error" not in result:
-                on_event({"type": "outreach_drafts", "drafts": result.get("drafts", [])})
-                if run_id:
-                    mem.save_icpdb_phase(run_id, 5, {"drafts_count": result.get("count", 0)})
-                    on_event({"type": "phase_saved", "phase": 5})
-
-            result_preview = json.dumps(result, ensure_ascii=False)
-            on_event({
-                "type":   "tool_result",
-                "tool":   tool_name,
-                "result": result_preview[:500] + ("…" if len(result_preview) > 500 else ""),
-                "ok":     "error" not in result,
-            })
-
-            if verbose:
-                print(f"   → {result_preview[:300]}")
-
-            tool_results.append({
-                "type":        "tool_result",
-                "tool_use_id": block.id,
-                "content":     json.dumps(result_for_model),
-            })
-
-        if tool_results:
-            messages.append({"role": "user", "content": tool_results})
-
-    # Save phase 4 summary if we updated anything
-    if _updated_fields_total > 0 and run_id:
-        mem.save_icpdb_phase(run_id, 4, {"updated_fields_total": _updated_fields_total})
-
-    return "Agent loop ended unexpectedly."
+    return AgentSpec(
+        name="Kooza",
+        system_prompt=ICPDB_SYSTEM_PROMPT,
+        tools=ICPDB_TOOLS,
+        tool_functions=TOOL_FUNCTIONS,
+        tool_phase_map=TOOL_PHASE_MAP,
+        blocking_tools={
+            "propose_performer_updates":     h_propose_updates,
+            "propose_duplicate_resolutions": h_propose_dedups,
+        },
+        after_tool=after_tool,
+    )
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
 
 def run_with_callbacks(
     on_event,
-    check_pause,
-    get_update_decisions,
+    check_pause=None,
+    decide=None,
     run_mode: str = "full",
     run_id: str | None = None,
     prefs: dict | None = None,
 ) -> str:
-    """Dashboard entry point — streams events via callbacks."""
+    """Host entry point — streams events via on_event; decisions via decide(kind, payload)."""
     if run_id is None:
         run_id = mem.create_icpdb_run(run_mode)
 
@@ -516,15 +308,10 @@ def run_with_callbacks(
 
     on_event({"type": "phase", "phase": 1, "label": "Audit"})
 
+    ctx = AgentContext(on_event=on_event, check_pause=check_pause, decide=decide)
+
     try:
-        result = _loop(
-            messages,
-            on_event,
-            check_pause,
-            get_update_decisions,
-            run_id,
-            verbose=False,
-        )
+        result = run_loop(_make_spec(run_id), messages, ctx)
         mem.complete_icpdb_run(run_id)
         on_event({"type": "history_updated"})
         return result
