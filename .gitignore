@@ -12,3 +12,6 @@ agent/alegria_history.json
 agent/alegria_memories.json
 agent/run_history.json
 agent/icpdb_prefs.json
+agent/agent_data.db
+agent/outreach_history.json
+agent/*.json.migrated
