@@ -10,13 +10,11 @@ Fulfilled/Closed.  Runs autonomously on a schedule — no blocking decisions.
 from __future__ import annotations
 
 from .agent_runtime import AgentContext, AgentSpec, run_loop
-from .kurios_prompts import KURIOS_SYSTEM_PROMPT, KURIOS_PHASE_PROMPTS
+from .kurios_prompts import KURIOS_SYSTEM_PROMPT, kickoff_prompt
 from .kurios_tools import (
     search_circus_jobs,
     get_default_job_queries,
     list_active_jobs,
-    create_job,
-    update_job_seen,
     close_stale_jobs,
     sync_jobs,
 )
@@ -108,81 +106,78 @@ KURIOS_TOOLS: list[dict] = [
 ]
 
 TOOL_FUNCTIONS = {
-    "search_circus_jobs":   search_circus_jobs,
+    "search_circus_jobs":      search_circus_jobs,
     "get_default_job_queries": get_default_job_queries,
-    "list_active_jobs":     list_active_jobs,
-    "sync_jobs":            sync_jobs,
-    "close_stale_jobs":     close_stale_jobs,
+    "list_active_jobs":        list_active_jobs,
+    "sync_jobs":               sync_jobs,
+    "close_stale_jobs":        close_stale_jobs,
 }
 
+# tool_name -> (phase number, phase label)
 TOOL_PHASE_MAP = {
-    "search_circus_jobs":      1,
-    "get_default_job_queries": 1,
-    "list_active_jobs":        1,
-    "sync_jobs":               3,
-    "close_stale_jobs":        3,
-}
-
-PHASE_LABELS = {
-    1: "Search",
-    2: "Deduplicate & Classify",
-    3: "Sync to Notion",
+    "get_default_job_queries": (1, "Search"),
+    "search_circus_jobs":      (1, "Search"),
+    "list_active_jobs":        (1, "Search"),
+    "sync_jobs":               (3, "Sync to Notion"),
+    "close_stale_jobs":        (3, "Sync to Notion"),
 }
 
 
-def _make_spec(run_id: str) -> AgentSpec:
-    completed: list[int] = []
+def _make_spec(run_id: str | None) -> AgentSpec:
 
-    def after_tool(tool: str, inp: dict, result: dict) -> dict | None:
-        phase = TOOL_PHASE_MAP.get(tool, 0)
-        if phase and phase not in completed:
-            completed.append(phase)
-            run_store.save_phase(run_id, phase, f"phase{phase}", result)
+    def after_tool(tool_name: str, tool_input: dict, result: dict, ctx: AgentContext):
+        if tool_name == "sync_jobs" and isinstance(result, dict) and "error" not in result:
+            if run_id:
+                run_store.save_phase(run_id, 3, "phase3", {
+                    "created_count":   result.get("created_count", 0),
+                    "refreshed_count": result.get("refreshed_count", 0),
+                    "skipped_count":   result.get("skipped_count", 0),
+                })
+            ctx.on_event({"type": "jobs_synced",
+                          "created":   result.get("created_count", 0),
+                          "refreshed": result.get("refreshed_count", 0)})
+        if tool_name == "close_stale_jobs" and isinstance(result, dict) and "error" not in result:
+            if run_id:
+                run_store.save_phase(run_id, 3, "phase3_closed", {"closed_count": result.get("count", 0)})
         return None
 
     return AgentSpec(
+        name="Kurios",
         system_prompt=KURIOS_SYSTEM_PROMPT,
         tools=KURIOS_TOOLS,
         tool_functions=TOOL_FUNCTIONS,
-        phase_prompts=KURIOS_PHASE_PROMPTS,
-        phase_labels=PHASE_LABELS,
+        tool_phase_map=TOOL_PHASE_MAP,
         after_tool=after_tool,
     )
 
 
 def run_with_callbacks(
-    run_id: str | None = None,
-    on_event=None,
+    on_event,
     check_pause=None,
     decide=None,        # unused — Kurios is non-interactive
-) -> dict:
+    run_id: str | None = None,
+) -> str:
     """
-    Run Kurios to completion.  Fully autonomous — no blocking decisions.
-    on_event(type, payload) is called for progress events.
-    Returns the final run record.
+    Run Kurios to completion. Fully autonomous — no blocking decisions.
+    on_event(event_dict) receives progress events. Returns the final text.
     """
     import time as _time
     if run_id is None:
         run_id = f"kurios-{_time.strftime('%Y-%m-%d-%H%M%S')}"
+        run_id = run_store.create_run("kurios", run_id, {"run_id": run_id})
 
-    run_store.create_run("kurios", run_id, {"run_id": run_id})
+    on_event({"type": "run_id", "run_id": run_id})
+    on_event({"type": "phase", "phase": 1, "label": "Search"})
 
-    def _emit(event_type: str, **kwargs):
-        if on_event:
-            on_event({"type": event_type, **kwargs})
+    messages = [{"role": "user", "content": kickoff_prompt()}]
+    ctx = AgentContext(on_event=on_event, check_pause=check_pause, decide=decide)
 
     try:
-        spec = _make_spec(run_id)
-        ctx = AgentContext(
-            run_id=run_id,
-            on_event=_emit,
-            check_pause=check_pause or (lambda: False),
-            decide=decide or (lambda kind, payload: {}),
-        )
-        run_loop(ctx, spec)
+        result = run_loop(_make_spec(run_id), messages, ctx)
         run_store.complete_run(run_id)
+        on_event({"type": "done"})
+        return result
     except Exception as exc:
         run_store.fail_run(run_id, str(exc))
-        _emit("error", message=str(exc))
-
-    return run_store.get_run(run_id) or {}
+        on_event({"type": "error", "message": str(exc)})
+        raise

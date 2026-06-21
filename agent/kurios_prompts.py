@@ -66,30 +66,16 @@ Brief, precise, factual. No filler. Report counts, dates, and source URLs.
 """
 
 
-KURIOS_PHASE_PROMPTS = {
-    1: """\
-Phase 1: Search for circus and contortion job listings.
-
-Start by calling get_default_job_queries() to get the standard query set, then run \
-search_circus_jobs() for each one. Run additional targeted searches if you notice \
-promising leads (e.g. a specific company hiring or a new job board). \
-Collect every listing you find — titles, companies, locations, URLs, snippets.
-""",
-
-    2: """\
-Phase 2: Deduplicate and classify.
-
-From your search results, build a clean list of distinct job opportunities. \
-Remove duplicates (same role at the same company), filter out non-performance roles, \
-and assign each listing an accurate job_type. Prepare the final list for sync_jobs().
-""",
-
-    3: """\
-Phase 3: Sync to Notion and close stale jobs.
-
-Call sync_jobs() with your cleaned listing list to create new jobs and refresh \
-existing ones. Then call close_stale_jobs(stale_days=14) to mark any job \
-not seen in 14 days as Fulfilled/Closed. \
-Finish with a brief summary: N created, N refreshed, N closed.
-""",
-}
+def kickoff_prompt() -> str:
+    """The single user message that starts a Kurios run."""
+    return (
+        "Begin today's circus jobs scan.\n\n"
+        "Phase 1 — SEARCH: Call get_default_job_queries(), then run search_circus_jobs() "
+        "for each query (and any extra leads you spot). Collect every listing: title, "
+        "company, location, source URL, brief description.\n\n"
+        "Phase 2 — DEDUPLICATE & CLASSIFY: Build a clean list of distinct opportunities, "
+        "drop non-performance roles, and assign each an accurate job_type.\n\n"
+        "Phase 3 — SYNC: Call sync_jobs() ONCE with all found listings, then "
+        "close_stale_jobs(stale_days=14). Finish with a brief summary: N created, "
+        "N refreshed, N closed."
+    )
