@@ -81,6 +81,8 @@ def list_active_jobs() -> dict:
     Returns {jobs: [{id, title, url, status, company, last_seen, date_found}]}.
     """
     db_id = _jobs_db_id()
+    if not db_id:
+        return {"jobs": [], "count": 0, "warning": "NOTION_JOBS_DS is not configured. Set it in Admin Settings → Circus Jobs DB."}
     jobs: list[dict] = []
     cursor = None
 
@@ -152,6 +154,8 @@ def create_job(
     description: str = "",
     job_type: str = "Circus / Acrobatic",
 ) -> dict:
+    if not _jobs_db_id():
+        raise RuntimeError("NOTION_JOBS_DS is not configured — paste the Circus Jobs database ID into Admin Settings.")
     """
     Create a new job listing in the Notion jobs database.
     job_type must be one of: Contortion Specialist, Aerial + Contortion,

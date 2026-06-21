@@ -169,7 +169,7 @@ def run_with_callbacks(
 
     def _emit(event_type: str, **kwargs):
         if on_event:
-            on_event(event_type, kwargs)
+            on_event({"type": event_type, **kwargs})
 
     try:
         spec = _make_spec(run_id)

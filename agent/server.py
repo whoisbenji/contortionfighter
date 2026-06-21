@@ -550,7 +550,7 @@ def _start_scheduler():
         try:
             log.info("Scheduler: starting Kurios jobs scan")
             result = kurios_agent.run_with_callbacks(
-                on_event=lambda t, p: log.debug("kurios event %s: %s", t, p),
+                on_event=lambda e: log.debug("kurios event %s", e),
             )
             status = result.get("status", "unknown")
             log.info("Scheduler: Kurios finished — %s", status)
