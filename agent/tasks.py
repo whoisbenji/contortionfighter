@@ -5,6 +5,7 @@ One place computes what the organisation should do next:
   • Luzia   — the monthly roundup for the current month
   • Varekai — the quarterly (90-day) outreach cycle
   • Kooza   — ICPDB upkeep: stale audit or low health score
+  • Kurios  — daily circus jobs scan
 
 get_tasks() returns every recurring task with its current state; it powers
 Alegría's system prompt (so she nudges proactively), the /api/tasks endpoint,
@@ -21,6 +22,7 @@ from . import run_store
 OUTREACH_CYCLE_DAYS = 90
 AUDIT_STALE_DAYS = 30
 HEALTH_THRESHOLD = 75
+JOBS_SCAN_HOURS = 24
 
 
 def _days_since(iso_timestamp: str | None) -> int | None:
@@ -108,10 +110,39 @@ def _kooza_task() -> dict:
     }
 
 
+def _kurios_task() -> dict:
+    last = run_store.last_completed_run("kurios")
+    last_ts = (last or {}).get("completed_at") or (last or {}).get("created_at")
+    days = _days_since(last_ts)
+    if days is None:
+        due, detail = True, "Circus jobs scan has never been run."
+    elif days * 24 >= JOBS_SCAN_HOURS:
+        due, detail = True, f"Last jobs scan was {days} day{'s' if days != 1 else ''} ago — daily scan is due."
+    else:
+        due, detail = False, f"Jobs scan ran today."
+    # Count active listings from last run summary if available
+    active = None
+    if last:
+        p3 = last.get("phase3") or {}
+        created = p3.get("created_count", 0)
+        active_info = f"{created} new listings last run." if created else ""
+    else:
+        active_info = ""
+    return {
+        "id":     "circus_jobs_scan",
+        "agent":  "kurios",
+        "label":  "Daily circus jobs scan",
+        "due":    due,
+        "detail": f"{detail} {active_info}".strip(),
+        "days_since_last": days,
+        "action": {"tool": "run_kurios", "params": {}},
+    }
+
+
 def get_tasks() -> list[dict]:
     """All recurring tasks with their current due-state, due ones first."""
     today = date.today()
-    tasks = [_luzia_task(today), _varekai_task(), _kooza_task()]
+    tasks = [_luzia_task(today), _varekai_task(), _kooza_task(), _kurios_task()]
     return sorted(tasks, key=lambda t: not t["due"])
 
 

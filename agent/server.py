@@ -39,6 +39,7 @@ from .luzia_agent import run_with_callbacks
 from . import kooza_agent
 from . import alegria_agent
 from . import varekai_agent
+from . import kurios_agent
 
 app = FastAPI(title="Contortion Space Agent Dashboard")
 
@@ -494,6 +495,85 @@ async def varekai_websocket_endpoint(ws: WebSocket):
             await ws.send_text(json.dumps({"type": "error", "message": str(exc)}))
         except Exception:
             pass
+
+
+# ── Kurios WebSocket + API ────────────────────────────────────────────────────
+
+@app.websocket("/ws/kurios")
+async def kurios_websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    try:
+        msg = json.loads(await ws.receive_text())
+        if msg.get("type") != "start":
+            await ws.send_text(json.dumps({"type": "error", "message": "First message must be {type:'start'}"}))
+            return
+
+        session = Session()
+        await ws.send_text(json.dumps({"type": "started"}))
+        await _serve_agent(ws, session, lambda: kurios_agent.run_with_callbacks(
+            on_event=session.on_event,
+            check_pause=session.check_pause,
+        ))
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        try:
+            await ws.send_text(json.dumps({"type": "error", "message": str(exc)}))
+        except Exception:
+            pass
+
+
+@app.get("/api/kurios/jobs")
+async def get_kurios_jobs():
+    """Current active job listings from the Notion jobs database."""
+    from .kurios_tools import list_active_jobs
+    try:
+        return JSONResponse(list_active_jobs())
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+# ── Daily scheduler ───────────────────────────────────────────────────────────
+
+def _start_scheduler():
+    """
+    Run a lightweight background scheduler in its own daemon thread.
+    Checks every hour whether any tasks are due; if so, runs them silently
+    (no WebSocket — autonomous mode, output goes to server logs only).
+    The scheduler is intentionally simple: APScheduler is not required.
+    """
+    import time as _time
+
+    def _run_kurios_headless():
+        import logging
+        log = logging.getLogger("kurios.scheduler")
+        try:
+            log.info("Scheduler: starting Kurios jobs scan")
+            result = kurios_agent.run_with_callbacks(
+                on_event=lambda t, p: log.debug("kurios event %s: %s", t, p),
+            )
+            status = result.get("status", "unknown")
+            log.info("Scheduler: Kurios finished — %s", status)
+        except Exception as exc:
+            log.error("Scheduler: Kurios failed — %s", exc)
+
+    def _loop():
+        while True:
+            _time.sleep(3600)   # check once per hour
+            try:
+                due_tasks = tasks.get_due_tasks()
+                for t in due_tasks:
+                    if t["id"] == "circus_jobs_scan":
+                        _run_kurios_headless()
+            except Exception:
+                pass
+
+    t = threading.Thread(target=_loop, daemon=True, name="kurios-scheduler")
+    t.start()
+
+
+# Start the scheduler when the server process boots
+_start_scheduler()
 
 
 @app.get("/")

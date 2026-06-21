@@ -16,6 +16,7 @@ NOTION_MONTHLY_POSTS_DS    = "23e3c48a-f297-806a-b2ed-000b34c63f74"   # Monthly 
 NOTION_MONTHLY_RESEARCH_DS = "3293c48a-f297-8010-b5fc-000b5f289537"  # Monthly research
 NOTION_ICPDB_DS            = "3253c48a-f297-8053-899f-d014af1786ab"   # ICPDB performers
 NOTION_SHOWS_DS            = "3253c48a-f297-805e-9f63-e7672d0ecb35"   # Shows
+NOTION_JOBS_DS             = ""   # Circus Jobs — set via admin panel or NOTION_JOBS_DS env var
 
 # ── Webflow ──────────────────────────────────────────────────────────────────
 WEBFLOW_BASE = "https://api.webflow.com/v2"
@@ -41,8 +42,9 @@ _overrides: dict = {}
 _DEFAULTS = {
     "NOTION_MONTHLY_POSTS_DS":    NOTION_MONTHLY_POSTS_DS,
     "NOTION_MONTHLY_RESEARCH_DS": NOTION_MONTHLY_RESEARCH_DS,
-    "NOTION_ICPDB_DS":            NOTION_ICPDB_DS,  # 3253c48a-f297-8053-899f-d014af1786ab
+    "NOTION_ICPDB_DS":            NOTION_ICPDB_DS,
     "NOTION_SHOWS_DS":            NOTION_SHOWS_DS,
+    "NOTION_JOBS_DS":             NOTION_JOBS_DS,
 }
 
 
@@ -53,8 +55,12 @@ def set_overrides(d: dict) -> None:
 
 
 def get(key: str) -> str:
-    """Return the override value if set, otherwise the module-level default."""
+    """Return override → env var → module default, in that order."""
+    import os as _os
     if key in _overrides:
         return _overrides[key]
+    env = _os.environ.get(key, "")
+    if env:
+        return env
     return _DEFAULTS.get(key, globals().get(key, ""))
 
