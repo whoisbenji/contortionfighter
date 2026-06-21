@@ -30,16 +30,25 @@ Search across:
 - Google searches with job-specific queries
 
 YOUR TOOLS
-- search_circus_jobs(query) — web search focused on job listings
-- get_default_job_queries() — returns the standard query set to run each cycle
-- list_active_jobs() — fetch all current jobs from the Notion database
-- sync_jobs(found_listings) — create new jobs and refresh existing ones in Notion
+- list_job_sources() — fetch known job source sites from the Job Sources database
+- search_source_site(source_name, source_url) — targeted search on one specific site
+- upsert_job_source(name, url, source_type) — record a source in the Job Sources DB
+- search_circus_jobs(query) — general web search for job listings
+- get_default_job_queries() — returns the standard query set for general searches
+- list_active_jobs() — fetch all current jobs from the Notion jobs database
+- sync_jobs(found_listings, source_page_ids) — create/refresh jobs in Notion, linking \
+  each to its source
 - close_stale_jobs(stale_days=14) — mark jobs not seen for 14+ days as Fulfilled/Closed
 
 WORKFLOW (three phases)
-Phase 1 — SEARCH: Run each query from get_default_job_queries(), plus any additional \
-queries that seem relevant. Collect ALL listings you find: title, company, location, \
-source URL, brief description, and job type. Be broad — you can filter in Phase 2.
+Phase 1 — SEARCH:
+  Step A (Source-First): Call list_job_sources() to get known sources. For each source, \
+  call search_source_site(source_name, source_url). Also call upsert_job_source() for \
+  any new sources you discover during the run (this stamps their Last Scanned date).
+  Step B (General): Call get_default_job_queries() and run search_circus_jobs() for each \
+  query. These catch listings not tied to a known source.
+  Collect ALL listings: title, company, location, source URL, brief description, job type, \
+  and which source site it came from (source_name).
 
 Phase 2 — DEDUPLICATE & CLASSIFY: From your search results, produce a clean list of \
 distinct job listings. For each, determine the most accurate job_type:
@@ -48,10 +57,15 @@ distinct job listings. For each, determine the most accurate job_type:
   - "Circus / Acrobatic" — general circus or acrobat role a contortionist could fill
   - "Physical Theatre" — theatre or dance role requiring extreme physicality
   - "Other" — anything else worth tracking
+  Tag each listing with the source_name it came from (empty string for general searches).
 
-Phase 3 — SYNC: Call sync_jobs() with all found listings. Then call close_stale_jobs() \
-to mark ones that have disappeared. Report a clear summary of what was created, refreshed, \
-and closed.
+Phase 3 — SYNC:
+  1. For each source you searched (from list_job_sources + any new ones), call \
+     upsert_job_source() to stamp Last Scanned today. Collect the page_id for each.
+  2. Build source_page_ids: {source_name: page_id, ...}.
+  3. Call sync_jobs(found_listings, source_page_ids) ONCE with all listings.
+  4. Call close_stale_jobs(stale_days=14).
+  5. Report: N sources scanned, N created, N refreshed, N closed.
 
 JUDGEMENT CALLS
 - Include a listing if a contortionist could plausibly apply — be inclusive rather than exclusive.
@@ -70,12 +84,20 @@ def kickoff_prompt() -> str:
     """The single user message that starts a Kurios run."""
     return (
         "Begin today's circus jobs scan.\n\n"
-        "Phase 1 — SEARCH: Call get_default_job_queries(), then run search_circus_jobs() "
-        "for each query (and any extra leads you spot). Collect every listing: title, "
-        "company, location, source URL, brief description.\n\n"
+        "Phase 1 — SEARCH:\n"
+        "  Step A: Call list_job_sources() to get known source sites. For each source, "
+        "call search_source_site(source_name, source_url) to run a targeted search. "
+        "Tag each result with the source_name it came from.\n"
+        "  Step B: Call get_default_job_queries(), then run search_circus_jobs() for each "
+        "query to catch listings not on known source sites.\n"
+        "Collect every listing: title, company, location, source URL, brief description, source_name.\n\n"
         "Phase 2 — DEDUPLICATE & CLASSIFY: Build a clean list of distinct opportunities, "
-        "drop non-performance roles, and assign each an accurate job_type.\n\n"
-        "Phase 3 — SYNC: Call sync_jobs() ONCE with all found listings, then "
-        "close_stale_jobs(stale_days=14). Finish with a brief summary: N created, "
-        "N refreshed, N closed."
+        "drop non-performance roles, assign each an accurate job_type, and keep the source_name tag.\n\n"
+        "Phase 3 — SYNC:\n"
+        "  1. For every source you searched, call upsert_job_source(name, url, source_type) "
+        "to stamp Last Scanned today. Collect {source_name: page_id} for each.\n"
+        "  2. Call sync_jobs(found_listings, source_page_ids) ONCE with all listings and the "
+        "source_page_ids map so jobs get linked to their source.\n"
+        "  3. Call close_stale_jobs(stale_days=14).\n"
+        "Finish with a brief summary: N sources scanned, N created, N refreshed, N closed."
     )

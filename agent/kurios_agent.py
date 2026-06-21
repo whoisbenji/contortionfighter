@@ -17,10 +17,54 @@ from .kurios_tools import (
     list_active_jobs,
     close_stale_jobs,
     sync_jobs,
+    list_job_sources,
+    upsert_job_source,
+    search_source_site,
 )
 from . import run_store
 
 KURIOS_TOOLS: list[dict] = [
+    {
+        "name": "list_job_sources",
+        "description": "Fetch all known job sources from the Job Sources Notion database. Call this first to get the list of sites to search.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "search_source_site",
+        "description": (
+            "Run a targeted web search for circus/contortion jobs at a specific source site. "
+            "Use this for each source returned by list_job_sources before falling back to general searches."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "source_name": {"type": "string", "description": "Name of the job source (e.g. 'CircusTalk')."},
+                "source_url":  {"type": "string", "description": "Homepage URL of the source (used to build a site: search)."},
+                "max_results": {"type": "integer", "description": "Results to return (default 10)."},
+            },
+            "required": ["source_name"],
+        },
+    },
+    {
+        "name": "upsert_job_source",
+        "description": (
+            "Create a new job source in the Job Sources database, or refresh its Last Scanned date if it already exists. "
+            "Call this for each source you searched, and for any new sources you discover during the run."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name":        {"type": "string", "description": "Display name of the source."},
+                "url":         {"type": "string", "description": "Homepage URL of the source."},
+                "source_type": {
+                    "type": "string",
+                    "description": "Category of source.",
+                    "enum": ["Job Board", "Company Career Page", "Casting Platform", "Social Media", "Newsletter", "Other"],
+                },
+            },
+            "required": ["name"],
+        },
+    },
     {
         "name": "search_circus_jobs",
         "description": (
@@ -78,9 +122,18 @@ KURIOS_TOOLS: list[dict] = [
                                     "Other",
                                 ],
                             },
+                            "source_name": {
+                                "type": "string",
+                                "description": "Name of the job source this listing came from (must match a key in source_page_ids).",
+                            },
                         },
                         "required": ["title"],
                     },
+                },
+                "source_page_ids": {
+                    "type": "object",
+                    "description": "Mapping of source_name -> Notion page ID for each source, used to link jobs to sources. Build this from upsert_job_source results.",
+                    "additionalProperties": {"type": "string"},
                 },
             },
             "required": ["found_listings"],
@@ -106,6 +159,9 @@ KURIOS_TOOLS: list[dict] = [
 ]
 
 TOOL_FUNCTIONS = {
+    "list_job_sources":        list_job_sources,
+    "search_source_site":      search_source_site,
+    "upsert_job_source":       upsert_job_source,
     "search_circus_jobs":      search_circus_jobs,
     "get_default_job_queries": get_default_job_queries,
     "list_active_jobs":        list_active_jobs,
@@ -115,9 +171,12 @@ TOOL_FUNCTIONS = {
 
 # tool_name -> (phase number, phase label)
 TOOL_PHASE_MAP = {
+    "list_job_sources":        (1, "Search"),
+    "search_source_site":      (1, "Search"),
     "get_default_job_queries": (1, "Search"),
     "search_circus_jobs":      (1, "Search"),
     "list_active_jobs":        (1, "Search"),
+    "upsert_job_source":       (3, "Sync to Notion"),
     "sync_jobs":               (3, "Sync to Notion"),
     "close_stale_jobs":        (3, "Sync to Notion"),
 }

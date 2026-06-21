@@ -69,6 +69,146 @@ def get_default_job_queries() -> dict:
     return {"queries": _JOB_QUERIES}
 
 
+# ── Job Sources database ──────────────────────────────────────────────────────
+
+def _sources_db_id() -> str:
+    return cfg.get("NOTION_JOB_SOURCES_DS")
+
+
+def list_job_sources() -> dict:
+    """
+    Fetch all job sources from the Job Sources Notion database.
+    Returns {sources: [{id, name, url, source_type, last_scanned}]}.
+    If the DB is not configured, returns an empty list with a warning.
+    """
+    db_id = _sources_db_id()
+    if not db_id:
+        return {"sources": [], "count": 0,
+                "warning": "NOTION_JOB_SOURCES_DS is not configured. Set it in Admin Settings → Job Sources DB."}
+
+    sources: list[dict] = []
+    cursor = None
+    while True:
+        payload: dict = {"page_size": 100}
+        if cursor:
+            payload["start_cursor"] = cursor
+        resp = requests.post(
+            f"{cfg.NOTION_BASE}/databases/{db_id}/query",
+            headers=_notion_headers(),
+            json=payload,
+            timeout=30,
+        )
+        _raise_for(resp)
+        data = resp.json()
+        for page in data.get("results", []):
+            if page.get("archived"):
+                continue
+            props = page.get("properties", {})
+
+            def _text(key: str) -> str:
+                p = props.get(key, {})
+                ptype = p.get("type", "")
+                if ptype == "title":
+                    texts = p.get("title", [])
+                elif ptype == "rich_text":
+                    texts = p.get("rich_text", [])
+                elif ptype == "url":
+                    return p.get("url") or ""
+                else:
+                    texts = []
+                return texts[0].get("plain_text", "") if texts else ""
+
+            def _select(key: str) -> str:
+                sel = props.get(key, {}).get("select") or {}
+                return sel.get("name", "")
+
+            def _date(key: str) -> str:
+                d = props.get(key, {}).get("date") or {}
+                return d.get("start", "")
+
+            def _rollup_count(key: str) -> int:
+                r = props.get(key, {}).get("rollup", {})
+                return r.get("number") or 0
+
+            sources.append({
+                "id":           page["id"],
+                "notion_url":   page.get("url", ""),
+                "name":         _text("Name"),
+                "url":          _text("URL"),
+                "source_type":  _select("Source Type"),
+                "last_scanned": _date("Last Scanned"),
+                "listing_count": _rollup_count("Listing Count"),
+            })
+        if not data.get("has_more"):
+            break
+        cursor = data.get("next_cursor")
+
+    return {"sources": sources, "count": len(sources)}
+
+
+def upsert_job_source(name: str, url: str = "", source_type: str = "Job Board") -> dict:
+    """
+    Create or update a job source in the Job Sources database.
+    If a source with the same name already exists, refreshes its Last Scanned date.
+    Returns {page_id, notion_url, action: created|refreshed}.
+    """
+    db_id = _sources_db_id()
+    if not db_id:
+        return {"warning": "NOTION_JOB_SOURCES_DS is not configured — skipping source upsert."}
+
+    existing = list_job_sources()
+    for src in existing.get("sources", []):
+        if src["name"].strip().lower() == name.strip().lower():
+            resp = requests.patch(
+                f"{cfg.NOTION_BASE}/pages/{src['id']}",
+                headers=_notion_headers(),
+                json={"properties": {"Last Scanned": {"date": {"start": _today()}}}},
+                timeout=30,
+            )
+            _raise_for(resp)
+            return {"page_id": src["id"], "notion_url": src["notion_url"], "action": "refreshed", "name": name}
+
+    properties: dict = {
+        "Name":         {"title": [{"text": {"content": name}}]},
+        "Source Type":  {"select": {"name": source_type}},
+        "Last Scanned": {"date": {"start": _today()}},
+    }
+    if url:
+        properties["URL"] = {"url": url}
+
+    resp = requests.post(
+        f"{cfg.NOTION_BASE}/pages",
+        headers=_notion_headers(),
+        json={"parent": {"database_id": db_id}, "properties": properties},
+        timeout=30,
+    )
+    _raise_for(resp)
+    page = resp.json()
+    return {"page_id": page["id"], "notion_url": page.get("url", ""), "action": "created", "name": name}
+
+
+def search_source_site(source_name: str, source_url: str = "", max_results: int = 10) -> dict:
+    """
+    Run a targeted web search for circus/contortion jobs at a specific source site.
+    Returns {source_name, query, results: [{title, url, snippet}]}.
+    """
+    domain = ""
+    if source_url:
+        import re
+        m = re.search(r"https?://(?:www\.)?([^/]+)", source_url)
+        if m:
+            domain = m.group(1)
+
+    if domain:
+        query = f"site:{domain} contortionist OR circus performer OR acrobat job OR audition OR casting"
+    else:
+        query = f"{source_name} contortionist circus performer job audition"
+
+    result = _web_search(query, max_results=max_results)
+    result["source_name"] = source_name
+    return result
+
+
 # ── Notion jobs database ──────────────────────────────────────────────────────
 
 def _jobs_db_id() -> str:
@@ -153,6 +293,7 @@ def create_job(
     source_url: str = "",
     description: str = "",
     job_type: str = "Circus / Acrobatic",
+    source_page_id: str = "",
 ) -> dict:
     if not _jobs_db_id():
         raise RuntimeError("NOTION_JOBS_DS is not configured — paste the Circus Jobs database ID into Admin Settings.")
@@ -176,6 +317,8 @@ def create_job(
         properties["Location"] = {"rich_text": [{"text": {"content": location}}]}
     if source_url:
         properties["Source URL"] = {"url": source_url}
+    if source_page_id:
+        properties["Source"] = {"relation": [{"id": source_page_id}]}
 
     payload: dict[str, Any] = {
         "parent": {"database_id": _jobs_db_id()},
@@ -245,19 +388,23 @@ def close_stale_jobs(stale_days: int = 14) -> dict:
     return {"closed": closed, "count": len(closed)}
 
 
-def sync_jobs(found_listings: list[dict]) -> dict:
+def sync_jobs(found_listings: list[dict], source_page_ids: dict | None = None) -> dict:
     """
     The core sync operation.  Given a list of listings discovered this run
-    (each with title, source_url, company, location, description, job_type),
+    (each with title, source_url, company, location, description, job_type,
+    and optionally source_name mapping to a source page ID in source_page_ids),
     this function:
       1. Loads all current active jobs from Notion.
       2. For each found listing: if a job with the same source_url already
          exists, refreshes its Last Seen date; otherwise creates it.
-      3. Returns a summary {created, refreshed, skipped}.
+      3. Links new jobs to their source via a Notion relation if source_page_ids provided.
+      4. Returns a summary {created, refreshed, skipped}.
 
+    source_page_ids: dict mapping source_name -> Notion page ID for the source.
     Matching is by source_url (exact) — if a listing has no URL it is
     always created (de-duplication is imperfect without a stable identifier).
     """
+    source_page_ids = source_page_ids or {}
     existing = list_active_jobs()
     by_url: dict[str, dict] = {}
     for job in existing["jobs"]:
@@ -271,6 +418,9 @@ def sync_jobs(found_listings: list[dict]) -> dict:
 
     for listing in found_listings:
         url = listing.get("source_url", "").strip()
+        source_name = listing.get("source_name", "")
+        source_page_id = source_page_ids.get(source_name) if source_name else None
+
         if url and url in by_url:
             update_job_seen(by_url[url]["id"])
             refreshed.append({"title": listing.get("title", ""), "url": url})
@@ -286,6 +436,7 @@ def sync_jobs(found_listings: list[dict]) -> dict:
                 source_url=url,
                 description=listing.get("description", ""),
                 job_type=listing.get("job_type", "Circus / Acrobatic"),
+                source_page_id=source_page_id,
             )
             created.append(result)
 

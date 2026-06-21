@@ -533,6 +533,16 @@ async def get_kurios_jobs():
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
+@app.get("/api/kurios/sources")
+async def get_kurios_sources():
+    """Job sources with listing counts from the Job Sources Notion database."""
+    from .kurios_tools import list_job_sources
+    try:
+        return JSONResponse(list_job_sources())
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
 # ── Daily scheduler ───────────────────────────────────────────────────────────
 
 def _start_scheduler():

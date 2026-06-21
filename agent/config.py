@@ -17,6 +17,7 @@ NOTION_MONTHLY_RESEARCH_DS = "3293c48a-f297-8010-b5fc-000b5f289537"  # Monthly r
 NOTION_ICPDB_DS            = "3253c48a-f297-8053-899f-d014af1786ab"   # ICPDB performers
 NOTION_SHOWS_DS            = "3253c48a-f297-805e-9f63-e7672d0ecb35"   # Shows
 NOTION_JOBS_DS             = ""   # Circus Jobs — set via admin panel or NOTION_JOBS_DS env var
+NOTION_JOB_SOURCES_DS     = ""   # Job Sources — set via admin panel or NOTION_JOB_SOURCES_DS env var
 
 # ── Webflow ──────────────────────────────────────────────────────────────────
 WEBFLOW_BASE = "https://api.webflow.com/v2"
@@ -45,6 +46,7 @@ _DEFAULTS = {
     "NOTION_ICPDB_DS":            NOTION_ICPDB_DS,
     "NOTION_SHOWS_DS":            NOTION_SHOWS_DS,
     "NOTION_JOBS_DS":             NOTION_JOBS_DS,
+    "NOTION_JOB_SOURCES_DS":     NOTION_JOB_SOURCES_DS,
 }
 
 

@@ -883,6 +883,15 @@
     <div id="kurios-status-banner" style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:24px;font-size:13px">Loading…</div>
     <div id="kurios-feed" style="display:flex;flex-direction:column;gap:8px;margin-bottom:28px"></div>
 
+    <!-- Job sources table -->
+    <div style="margin-bottom:28px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="mc-section-label">Job Sources</div>
+        <button class="btn btn-muted" id="kurios-refresh-sources-btn" style="font-size:11px;padding:4px 10px">↻ Refresh Sources</button>
+      </div>
+      <div id="kurios-sources-table"><div style="color:var(--muted);font-size:12px;font-family:var(--font-mono)">Load sources with ↻ Refresh Sources.</div></div>
+    </div>
+
     <!-- Live jobs table -->
     <div>
       <div class="mc-section-label" style="margin-bottom:12px">Current Listings</div>
@@ -901,6 +910,7 @@
     <div class="admin-field"><label>Performers DB (ICPDB)</label><input type="text" id="admin-icpdb" placeholder="Default: 3253c48a-f297-80c5-9bdd-000bb269690f" /></div>
     <div class="admin-field"><label>Shows DB</label><input type="text" id="admin-shows-db" placeholder="Default: 3253c48a-f297-805e-9f63-e7672d0ecb35" /></div>
     <div class="admin-field"><label>Circus Jobs DB (Kurios)</label><input type="text" id="admin-jobs-db" placeholder="Paste your Notion database ID here" /></div>
+    <div class="admin-field"><label>Job Sources DB (Kurios)</label><input type="text" id="admin-job-sources-db" placeholder="Paste your Job Sources database ID here" /></div>
     <div class="admin-actions">
       <button class="btn btn-muted" id="admin-reset-btn">Reset to Defaults</button>
       <button class="btn btn-primary" id="admin-save-btn">Save</button>
@@ -960,7 +970,8 @@ const ADMIN_KEYS = [
   { field: 'admin-posts-db',    key: 'NOTION_MONTHLY_POSTS_DS' },
   { field: 'admin-icpdb',       key: 'NOTION_ICPDB_DS' },
   { field: 'admin-shows-db',    key: 'NOTION_SHOWS_DS' },
-  { field: 'admin-jobs-db',     key: 'NOTION_JOBS_DS' },
+  { field: 'admin-jobs-db',         key: 'NOTION_JOBS_DS' },
+  { field: 'admin-job-sources-db',  key: 'NOTION_JOB_SOURCES_DS' },
 ];
 
 const TOOL_ICONS = {
@@ -1089,7 +1100,7 @@ function switchScreen(screen) {
   if (screen === 'review') { buildPhaseList(); }
   if (screen === 'alegria') { ensureAlegriaConnected(); }
   if (screen === 'varekai') { loadVarekaiStatus(); }
-  if (screen === 'kurios')  { loadKuriosStatus(); loadKuriosJobs(); }
+  if (screen === 'kurios')  { loadKuriosStatus(); loadKuriosSources(); loadKuriosJobs(); }
 }
 
 // ── Status ────────────────────────────────────────────────────────────────────
@@ -1230,6 +1241,48 @@ async function loadKuriosJobs() {
   }
 }
 
+async function loadKuriosSources() {
+  const el = document.getElementById('kurios-sources-table');
+  el.innerHTML = '<div style="color:var(--muted);font-size:12px;font-family:var(--font-mono)">Loading…</div>';
+  try {
+    const data = await fetch('/api/kurios/sources').then(r => r.json());
+    if (data.warning) { el.innerHTML = `<div style="color:var(--amber);font-size:12px">⚠ ${esc(data.warning)}</div>`; return; }
+    if (data.error)   { el.innerHTML = `<div style="color:var(--red);font-size:12px">${esc(data.error)}</div>`; return; }
+    const sources = data.sources || [];
+    if (!sources.length) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:12px">No sources yet — they populate automatically after the first scan.</div>';
+      return;
+    }
+    const SOURCE_TYPE_COLOURS = {
+      'Job Board': 'var(--purple)', 'Company Career Page': 'var(--cyan)',
+      'Casting Platform': 'var(--green)', 'Social Media': 'var(--yellow)',
+      'Newsletter': 'var(--amber)', 'Other': 'var(--muted)',
+    };
+    const rows = sources
+      .sort((a, b) => (b.listing_count || 0) - (a.listing_count || 0))
+      .map(s => {
+        const colour = SOURCE_TYPE_COLOURS[s.source_type] || 'var(--muted)';
+        const count = s.listing_count || 0;
+        const barW = Math.min(count * 8, 120);
+        return `<div style="display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:12px;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
+          <div>
+            <div style="font-size:13px;font-weight:600">${s.url ? `<a href="${esc(s.url)}" target="_blank" style="color:var(--text);text-decoration:none" onmouseover="this.style.color='var(--purple)'" onmouseout="this.style.color='var(--text)'">${esc(s.name)}</a>` : esc(s.name)}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;font-family:var(--font-mono)">${esc(s.last_scanned ? 'Last scanned ' + s.last_scanned : 'Not yet scanned')}</div>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:${colour}">${esc(s.source_type || '')}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="width:${barW}px;height:6px;background:var(--purple);border-radius:3px;min-width:4px"></div>
+            <span style="font-size:12px;font-family:var(--font-mono);color:${count > 0 ? 'var(--text)' : 'var(--muted)'}">${count} listing${count === 1 ? '' : 's'}</span>
+          </div>
+          ${s.notion_url ? `<a href="${esc(s.notion_url)}" target="_blank" style="font-size:11px;color:var(--muted);text-decoration:none">↗</a>` : '<span></span>'}
+        </div>`;
+      }).join('');
+    el.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:10px">${sources.length} source${sources.length === 1 ? '' : 's'} tracked</div>${rows}`;
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--red);font-size:12px">${esc(String(e))}</div>`;
+  }
+}
+
 function kuriosAddFeedItem(html) {
   const feed = document.getElementById('kurios-feed');
   const div = document.createElement('div');
@@ -1259,6 +1312,7 @@ function startKuriosRun() {
     } else if (t === 'done') {
       kuriosAddFeedItem('<span style="color:var(--green)">✓ Kurios complete</span>');
       loadKuriosStatus();
+      loadKuriosSources();
       loadKuriosJobs();
     } else if (t === 'error') {
       kuriosAddFeedItem(`<span style="color:var(--red)">⚠ ${esc(msg.message)}</span>`);
@@ -1268,6 +1322,7 @@ function startKuriosRun() {
 
 document.getElementById('kurios-run-btn').addEventListener('click', startKuriosRun);
 document.getElementById('kurios-refresh-jobs-btn').addEventListener('click', loadKuriosJobs);
+document.getElementById('kurios-refresh-sources-btn').addEventListener('click', loadKuriosSources);
 
 const TASK_LAUNCHERS = {
   monthly_roundup: (t) => {
