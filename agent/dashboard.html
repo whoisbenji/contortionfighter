@@ -1297,7 +1297,7 @@ function startKuriosRun() {
   if (kuriosWs) { kuriosWs.close(); kuriosWs = null; }
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   kuriosWs = new WebSocket(`${proto}//${location.host}/ws/kurios`);
-  kuriosWs.onopen = () => kuriosWs.send(JSON.stringify({ type: 'start' }));
+  kuriosWs.onopen = () => kuriosWs.send(JSON.stringify({ type: 'start', db_config: getDbConfig() }));
   kuriosWs.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     const t = msg.type;

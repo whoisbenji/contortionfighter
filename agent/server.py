@@ -508,6 +508,8 @@ async def kurios_websocket_endpoint(ws: WebSocket):
             await ws.send_text(json.dumps({"type": "error", "message": "First message must be {type:'start'}"}))
             return
 
+        cfg.set_overrides(msg.get("db_config", {}))
+
         session = Session()
         await ws.send_text(json.dumps({"type": "started"}))
         await _serve_agent(ws, session, lambda: kurios_agent.run_with_callbacks(
