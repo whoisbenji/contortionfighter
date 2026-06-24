@@ -32,6 +32,9 @@ Search across:
 YOUR TOOLS
 - list_job_sources() — fetch known job source sites from the Job Sources database
 - search_source_site(source_name, source_url) — targeted search on one specific site
+- fetch_listing_urls(page_url) — fetch a general listing page and extract direct links \
+  to individual job postings; use this whenever a search result points to a jobs index \
+  page rather than a specific ad
 - upsert_job_source(name, url, source_type) — record a source in the Job Sources DB
 - search_circus_jobs(query) — general web search for job listings
 - get_default_job_queries() — returns the standard query set for general searches
@@ -47,8 +50,14 @@ Phase 1 — SEARCH:
   any new sources you discover during the run (this stamps their Last Scanned date).
   Step B (General): Call get_default_job_queries() and run search_circus_jobs() for each \
   query. These catch listings not tied to a known source.
-  Collect ALL listings: title, company, location, source URL, brief description, job type, \
-  and which source site it came from (source_name).
+  Step C (Drill-Down): For any URL that appears to be a general listings page (a jobs \
+  index, a search results page, or a category page rather than a single job ad), call \
+  fetch_listing_urls(page_url) to extract the direct URLs of individual postings. \
+  Always prefer a URL that points to one specific job over a URL that lists many. \
+  A good individual-listing URL typically contains a job ID, a slug, or ends with the \
+  job title — e.g. /jobs/123-contortionist-at-spiegelworld, not /jobs or /jobs?q=circus.
+  Collect ALL listings: title, company, location, source URL (must be the direct posting \
+  URL, not the index page), brief description, job type, and source_name.
 
 Phase 2 — DEDUPLICATE & CLASSIFY: From your search results, produce a clean list of \
 distinct job listings. For each, determine the most accurate job_type:
@@ -70,7 +79,10 @@ Phase 3 — SYNC:
 JUDGEMENT CALLS
 - Include a listing if a contortionist could plausibly apply — be inclusive rather than exclusive.
 - Exclude generic admin/production/technical roles with no performance element.
-- If a listing has no source URL, include it only if you have enough detail (company + title).
+- Every source_url must point to ONE specific job ad, not a listings index. If fetch_listing_urls \
+  returns individual links, use those. If you cannot get a direct URL, omit the listing rather \
+  than storing a general page URL.
+- If a listing has no source URL at all, include it only if you have enough detail (company + title).
 - Do not invent or hallucinate listings. Every entry must come from a real search result.
 - Flag if a listing's URL leads somewhere that no longer has the posting — that helps \
   close_stale_jobs() work accurately.
@@ -90,7 +102,11 @@ def kickoff_prompt() -> str:
         "Tag each result with the source_name it came from.\n"
         "  Step B: Call get_default_job_queries(), then run search_circus_jobs() for each "
         "query to catch listings not on known source sites.\n"
-        "Collect every listing: title, company, location, source URL, brief description, source_name.\n\n"
+        "  Step C (Drill-Down): For any URL that looks like a general listings page — a jobs "
+        "index, a search-results page, a /jobs category — call fetch_listing_urls(page_url) "
+        "to extract direct links to individual postings. Always store the specific per-job URL, "
+        "not the index page.\n"
+        "Collect every listing: title, company, location, direct source URL, brief description, source_name.\n\n"
         "Phase 2 — DEDUPLICATE & CLASSIFY: Build a clean list of distinct opportunities, "
         "drop non-performance roles, assign each an accurate job_type, and keep the source_name tag.\n\n"
         "Phase 3 — SYNC:\n"

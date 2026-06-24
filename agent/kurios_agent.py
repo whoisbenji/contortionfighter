@@ -20,6 +20,7 @@ from .kurios_tools import (
     list_job_sources,
     upsert_job_source,
     search_source_site,
+    fetch_listing_urls,
 )
 from . import run_store
 
@@ -63,6 +64,24 @@ KURIOS_TOOLS: list[dict] = [
                 },
             },
             "required": ["name"],
+        },
+    },
+    {
+        "name": "fetch_listing_urls",
+        "description": (
+            "Fetch a job listing page and extract direct links to individual job postings. "
+            "Use this when a search result or source search returns a general listings page "
+            "(e.g. circustalk.com/jobs) rather than a specific job ad — call it to drill down "
+            "and get one URL per individual posting. Check is_general_page in the result to decide "
+            "if this is needed."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "page_url":  {"type": "string", "description": "URL of the general listing page to fetch."},
+                "max_links": {"type": "integer", "description": "Maximum individual links to return (default 20)."},
+            },
+            "required": ["page_url"],
         },
     },
     {
@@ -161,6 +180,7 @@ KURIOS_TOOLS: list[dict] = [
 TOOL_FUNCTIONS = {
     "list_job_sources":        list_job_sources,
     "search_source_site":      search_source_site,
+    "fetch_listing_urls":      fetch_listing_urls,
     "upsert_job_source":       upsert_job_source,
     "search_circus_jobs":      search_circus_jobs,
     "get_default_job_queries": get_default_job_queries,
@@ -173,6 +193,7 @@ TOOL_FUNCTIONS = {
 TOOL_PHASE_MAP = {
     "list_job_sources":        (1, "Search"),
     "search_source_site":      (1, "Search"),
+    "fetch_listing_urls":      (1, "Search"),
     "get_default_job_queries": (1, "Search"),
     "search_circus_jobs":      (1, "Search"),
     "list_active_jobs":        (1, "Search"),

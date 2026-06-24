@@ -10,9 +10,11 @@ queries so the agent can focus on decision-making rather than query construction
 from __future__ import annotations
 
 import os
+import re
 import time
 from datetime import date, datetime, timedelta
 from typing import Any
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -207,6 +209,93 @@ def search_source_site(source_name: str, source_url: str = "", max_results: int 
     result = _web_search(query, max_results=max_results)
     result["source_name"] = source_name
     return result
+
+
+def fetch_listing_urls(page_url: str, max_links: int = 20) -> dict:
+    """
+    Fetch a job listing page and extract links that look like individual job postings.
+    Use this when a search result points to a general listings page rather than a
+    specific job ad — call it to get direct links to individual postings.
+    Returns {page_url, individual_links: [{url, text}], is_general_page: bool}.
+    """
+    try:
+        resp = requests.get(
+            page_url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; ContortionSpace/1.0; +https://contortionspace.com)"},
+            timeout=15,
+            allow_redirects=True,
+        )
+    except Exception as exc:
+        return {"page_url": page_url, "error": str(exc), "individual_links": []}
+
+    if not resp.ok:
+        return {"page_url": page_url, "error": f"HTTP {resp.status_code}", "individual_links": []}
+
+    html = resp.text
+    base = page_url
+
+    # Extract all <a href> links with their text
+    raw_links = re.findall(r'<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', html, re.I | re.S)
+
+    base_parsed = urlparse(page_url)
+    base_domain = base_parsed.netloc
+
+    # Heuristics for "this looks like an individual job posting link"
+    _JOB_PATH_PATTERNS = re.compile(
+        r'/(job|jobs|position|posting|vacancy|opening|role|audition|casting|listing|opportunity|apply|career)s?/'
+        r'|[/-](\d{4,})'           # numeric ID in path
+        r'|/(view|detail|show)/',
+        re.I,
+    )
+    _EXCLUDE_PATTERNS = re.compile(
+        r'(login|signup|register|contact|about|faq|blog|news|category|tag|page/\d|#|mailto:|javascript:)',
+        re.I,
+    )
+    _CIRCUS_TERMS = re.compile(
+        r'(contortion|circus|acrobat|aerial|performer|dance|theatre|cabaret|variety|cruise|entertainment)',
+        re.I,
+    )
+
+    individual_links = []
+    seen_urls = set()
+
+    for href, link_text in raw_links:
+        href = href.strip()
+        if not href or href.startswith('#') or href.startswith('javascript:') or href.startswith('mailto:'):
+            continue
+
+        absolute = urljoin(base, href)
+        parsed = urlparse(absolute)
+
+        # Stay on the same domain
+        if parsed.netloc and parsed.netloc != base_domain:
+            continue
+        if _EXCLUDE_PATTERNS.search(absolute):
+            continue
+        if absolute in seen_urls or absolute == page_url:
+            continue
+
+        clean_text = re.sub(r'<[^>]+>', '', link_text).strip()
+
+        is_job_path = bool(_JOB_PATH_PATTERNS.search(parsed.path))
+        has_circus_term = bool(_CIRCUS_TERMS.search(clean_text) or _CIRCUS_TERMS.search(absolute))
+
+        if is_job_path or has_circus_term:
+            seen_urls.add(absolute)
+            individual_links.append({"url": absolute, "text": clean_text[:120]})
+            if len(individual_links) >= max_links:
+                break
+
+    # Decide if the original URL looks like a general listing page
+    general_page_patterns = re.compile(r'/(jobs|positions|vacancies|openings|auditions|casting|careers)/?$', re.I)
+    is_general_page = bool(general_page_patterns.search(urlparse(page_url).path)) or len(individual_links) > 3
+
+    return {
+        "page_url": page_url,
+        "individual_links": individual_links,
+        "is_general_page": is_general_page,
+        "count": len(individual_links),
+    }
 
 
 # ── Notion jobs database ──────────────────────────────────────────────────────
