@@ -2766,8 +2766,20 @@ function renderIcpdbHistory(runs) {
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
-function loadAdminFields() {
-  const saved = JSON.parse(localStorage.getItem('csAgentConfig') || '{}');
+async function loadAdminFields() {
+  let saved = {};
+  try {
+    // Server is source of truth; fall back to localStorage if server unreachable
+    const resp = await fetch('/api/admin/config');
+    if (resp.ok) {
+      saved = await resp.json();
+      localStorage.setItem('csAgentConfig', JSON.stringify(saved));
+    } else {
+      saved = JSON.parse(localStorage.getItem('csAgentConfig') || '{}');
+    }
+  } catch {
+    saved = JSON.parse(localStorage.getItem('csAgentConfig') || '{}');
+  }
   ADMIN_KEYS.forEach(({ field, key }) => { document.getElementById(field).value = saved[key] || ''; });
 }
 function getDbConfig() {
@@ -2782,18 +2794,20 @@ adminBtn.addEventListener('click', () => {
 adminOverlay.addEventListener('click', e => {
   if (e.target === adminOverlay) { adminOverlay.style.display = 'none'; adminBtn.classList.remove('active'); }
 });
-document.getElementById('admin-save-btn').addEventListener('click', () => {
-  const cfg = {};
+document.getElementById('admin-save-btn').addEventListener('click', async () => {
+  const config = {};
   ADMIN_KEYS.forEach(({ field, key }) => {
     const v = document.getElementById(field).value.trim();
-    if (v) cfg[key] = v;
+    if (v) config[key] = v;
   });
-  localStorage.setItem('csAgentConfig', JSON.stringify(cfg));
+  localStorage.setItem('csAgentConfig', JSON.stringify(config));
+  try { await fetch('/api/admin/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(config) }); } catch {}
   adminOverlay.style.display = 'none'; adminBtn.classList.remove('active');
 });
-document.getElementById('admin-reset-btn').addEventListener('click', () => {
+document.getElementById('admin-reset-btn').addEventListener('click', async () => {
   localStorage.removeItem('csAgentConfig');
   ADMIN_KEYS.forEach(({ field }) => { document.getElementById(field).value = ''; });
+  try { await fetch('/api/admin/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({}) }); } catch {}
 });
 
 // ── Image Gallery ─────────────────────────────────────────────────────────────

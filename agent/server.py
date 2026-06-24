@@ -433,6 +433,43 @@ async def alegria_websocket_endpoint(ws: WebSocket):
             pass
 
 
+# ── Admin config persistence ──────────────────────────────────────────────────
+
+_ADMIN_CONFIG_FILE = Path(__file__).parent / "admin_config.json"
+
+
+def _load_admin_config() -> dict:
+    try:
+        return json.loads(_ADMIN_CONFIG_FILE.read_text())
+    except Exception:
+        return {}
+
+
+def _save_admin_config(data: dict) -> None:
+    _ADMIN_CONFIG_FILE.write_text(json.dumps(data, indent=2))
+
+
+# Apply any saved admin config at startup so scheduled runs use persisted IDs
+_startup_config = _load_admin_config()
+if _startup_config:
+    cfg.set_overrides(_startup_config)
+
+
+@app.get("/api/admin/config")
+async def get_admin_config():
+    """Return persisted admin config (DB IDs etc.)."""
+    return JSONResponse(_load_admin_config())
+
+
+@app.post("/api/admin/config")
+async def save_admin_config(request: Request):
+    """Persist admin config to disk and apply overrides immediately."""
+    body = await request.json()
+    _save_admin_config(body)
+    cfg.set_overrides(body)
+    return JSONResponse({"ok": True})
+
+
 @app.get("/api/tasks")
 async def get_tasks():
     """All recurring tasks (monthly roundup, quarterly outreach, ICPDB health)."""
